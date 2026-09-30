@@ -15,6 +15,7 @@ services:
       - coolify
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.memore-landing-http.rule=Host(`memore.62.171.143.55.sslip.io`)"
       - "traefik.http.routers.memore-landing-http.entrypoints=http"
       - "traefik.http.routers.memore-landing.rule=Host(`memore.62.171.143.55.sslip.io`)"
@@ -59,6 +60,7 @@ services:
       - coolify
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
       - "traefik.http.routers.memore-api.rule=Host(`api-memore.62.171.143.55.sslip.io`)"
       - "traefik.http.routers.memore-api.entrypoints=https"
       - "traefik.http.routers.memore-api.tls=true"
