@@ -1,0 +1,61 @@
+services:
+  landing:
+    build:
+      context: ./landing
+      dockerfile: Dockerfile
+    container_name: memore_landing
+    restart: always
+    ports:
+      - "3010:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    networks:
+      - memore_net
+
+  bot:
+    build:
+      context: .
+      dockerfile: telegram_bot/Dockerfile
+    container_name: memore_bot
+    restart: always
+    env_file:
+      - ./telegram_bot/.env
+    volumes:
+      - bot_data:/app/telegram_bot/data
+    networks:
+      - memore_net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: memore_api
+    restart: always
+    ports:
+      - "8010:8000"
+    env_file:
+      - .env
+    volumes:
+      - uploads_data:/app/uploads
+      - logs_data:/app/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - memore_net
+
+volumes:
+  uploads_data:
+    name: memore_uploads_data
+  logs_data:
+    name: memore_logs_data
+  bot_data:
+    name: memore_bot_data
+
+networks:
+  memore_net:
+    name: memore_network
+    driver: bridge
