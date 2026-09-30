@@ -1,0 +1,34 @@
+# ==============================================================================
+# Me'morAI — Production Dependencies
+# Python 3.12+
+# ==============================================================================
+
+# Core Web Framework & ASGI
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+pydantic>=2.8.0,<3.0.0
+pydantic-settings>=2.4.0,<3.0.0
+
+# Database & Storage
+supabase>=2.6.0,<3.0.0
+asyncpg>=0.30.0
+
+# Background Worker & Task Queue
+celery>=5.4.0,<6.0.0
+redis>=5.0.0,<6.0.0
+
+# File Upload & Async File I/O
+python-multipart>=0.0.9
+aiofiles>=24.1.0
+
+# AI & LLM Vision Extraction
+google-genai>=0.1.1
+
+# HTTP Client & Security
+httpx>=0.27.0
+python-dotenv>=1.0.1
+email-validator>=2.2.0
+
+# Testing & Quality Assurance
+pytest>=8.0.0,<9.0.0
+pytest-asyncio>=0.23.0

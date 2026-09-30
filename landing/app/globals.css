@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #050B18;
+  --foreground: #ffffff;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+.glass-card {
+  @apply bg-glass-bg border border-glass-border backdrop-blur-md rounded-2xl;
+}
+
+.text-gradient {
+  @apply bg-gradient-text bg-clip-text text-transparent;
+}
+
+html {
+  scroll-behavior: smooth;
+}

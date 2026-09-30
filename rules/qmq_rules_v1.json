@@ -1,0 +1,415 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "created": "2026-09-30",
+    "jurisdiction": "UZ",
+    "description": "Me'morAI QMQ/ShNQ qoidalar bazasi — O'zbekiston Respublikasi rasmiy hujjatlari asosida",
+    "sources": [
+      "ShNQ 2.01.02-04 (mc.uz) — Binolar va inshootlarning yong'in xavfsizligi",
+      "ShNQ 2.07.02-22 (mc.uz) — Nogironligi bo'lgan shaxslar va keksalar uchun loyihalashtirish",
+      "ShNQ 2.08.01-19 (mc.uz) — Turar joy binolari",
+      "SHNQ 1.03.03-23 (mc.uz) — Qurilish obyektlarini loyihalashtirish"
+    ],
+    "official_portal": "https://mc.uz",
+    "legal_portal": "https://lex.uz"
+  },
+  "rules": [
+
+    {
+      "id": "UZ-FIRE-001",
+      "code": "ShNQ 2.01.02-04",
+      "clause": "Ilova 1, §3.10",
+      "category": "yong_in_xavfsizligi",
+      "severity": "critical",
+      "title_uz": "Yong'in o'chirish texnikasi o'tish yo'li kengligi",
+      "title_ru": "Ширина проезда для пожарных машин",
+      "description_uz": "Yong'in o'chirish avtomashinalari uchun o'tish yo'lining kengligi kamida 6 metr bo'lishi shart.",
+      "description_ru": "Ширина проезда для пожарных машин должна быть не менее 6 м.",
+      "check_type": "min_dimension",
+      "metric": "fire_access_road_width",
+      "unit": "m",
+      "min_value": 6.0,
+      "applies_to": ["residential", "commercial", "public"],
+      "building_height_min_m": 50,
+      "error_template_uz": "Yong'in o'tish yo'li kengligi {actual}m — me'yor bo'yicha kamida {required}m bo'lishi shart (ShNQ 2.01.02-04, §3.10)",
+      "error_template_ru": "Ширина проезда {actual}м — по норме не менее {required}м (ШНК 2.01.02-04, §3.10)"
+    },
+
+    {
+      "id": "UZ-FIRE-002",
+      "code": "ShNQ 2.01.02-04",
+      "clause": "Ilova 1, §3.12",
+      "category": "yong_in_xavfsizligi",
+      "severity": "critical",
+      "title_uz": "Yong'in o'tish tunneli minimal o'lchamlari",
+      "title_ru": "Минимальные размеры пожарного тоннеля",
+      "description_uz": "Har 100 metr fasad bo'ylab yong'in tushish o'tish yo'llari: balandligi kamida 4.25m, kengligi kamida 3.5m.",
+      "description_ru": "Через каждые 100 м по фасаду — проезды (тоннели): высота не менее 4,25 м, ширина не менее 3,5 м.",
+      "check_type": "min_dimension",
+      "metric": "fire_tunnel_dimensions",
+      "unit": "m",
+      "min_height_m": 4.25,
+      "min_width_m": 3.5,
+      "applies_to": ["residential", "commercial", "public"],
+      "error_template_uz": "Yong'in tushish teshigi: balandligi {actual_h}m (kerak: ≥4.25m), kengligi {actual_w}m (kerak: ≥3.5m) — ShNQ 2.01.02-04 §3.12",
+      "error_template_ru": "Пожарный тоннель: высота {actual_h}м (≥4.25м), ширина {actual_w}м (≥3.5м) — ШНК 2.01.02-04 §3.12"
+    },
+
+    {
+      "id": "UZ-FIRE-003",
+      "code": "ShNQ 2.01.02-04",
+      "clause": "Ilova 1, §3.13",
+      "category": "yong_in_xavfsizligi",
+      "severity": "critical",
+      "title_uz": "Baland binolar orasidagi yong'in oraliq masofasi",
+      "title_ru": "Противопожарные расстояния между высотными зданиями",
+      "description_uz": "Yon-yonma baland binolar orasidagi masofa: I–II darajali yanginga bardoshlilik — 15m dan kam emas; yon-yonma baland binolar — 30m dan kam emas.",
+      "description_ru": "Между высотными зданиями: I–II степень огнестойкости — не менее 15 м; между двумя высотными — не менее 30 м.",
+      "check_type": "min_distance",
+      "metric": "fire_separation_distance",
+      "unit": "m",
+      "cases": [
+        { "condition": "fire_resistance_I_or_II", "min_value": 15.0 },
+        { "condition": "fire_resistance_III_or_IV", "min_value": 25.0 },
+        { "condition": "between_two_highrise", "min_value": 30.0 }
+      ],
+      "applies_to": ["highrise"],
+      "building_height_min_m": 50,
+      "error_template_uz": "Binolar orasidagi yong'in oraliq masofasi {actual}m — me'yor bo'yicha {required}m dan kam bo'lmasligi shart (ShNQ 2.01.02-04, §3.13)",
+      "error_template_ru": "Противопожарный разрыв {actual}м — по норме не менее {required}м (ШНК 2.01.02-04, §3.13)"
+    },
+
+    {
+      "id": "UZ-ACCESS-001",
+      "code": "ShNQ 2.07.02-22",
+      "clause": "§17",
+      "category": "inkluzivlik",
+      "severity": "critical",
+      "title_uz": "Pandus qiyaligi (nishabligi)",
+      "title_ru": "Уклон пандуса",
+      "description_uz": "Nogironlar uchun pandusning bo'ylamasiga qiyaligi 1:12 nisbatda (8.33%) bo'lishi shart. Ko'ndalangi 1:50 (2%).",
+      "description_ru": "Продольный уклон пандуса — 1:12 (8,33%), поперечный — 1:50 (2%).",
+      "check_type": "max_ratio",
+      "metric": "ramp_slope_percent",
+      "unit": "%",
+      "max_value": 8.33,
+      "cross_slope_max_value": 2.0,
+      "applies_to": ["residential", "commercial", "public", "medical", "educational"],
+      "notes_uz": "Har bir pандus маршининг кўтарилиш balandligi 0.8m dan oshmasligi kerak. Yer osti yo'laklaridagi panduslar: 1:10 (10%).",
+      "error_template_uz": "Pandus qiyaligi {actual}% — me'yor bo'yicha maksimal {required}% (ShNQ 2.07.02-22, §17)",
+      "error_template_ru": "Уклон пандуса {actual}% — по норме максимум {required}% (ШНК 2.07.02-22, §17)"
+    },
+
+    {
+      "id": "UZ-ACCESS-002",
+      "code": "ShNQ 2.07.02-22",
+      "clause": "§17",
+      "category": "inkluzivlik",
+      "severity": "critical",
+      "title_uz": "Pandus kengligi",
+      "title_ru": "Ширина пандуса",
+      "description_uz": "O'rindiqli aravachadagi nogironlar uchun pandus kengligi 1.0m dan kam bo'lmasligi shart. Yirik transport ob'ektlarida: 1.5m dan kam bo'lmasin.",
+      "description_ru": "Ширина пандуса для инвалидов-колясочников не менее 1,0 м; в крупных транспортных объектах — не менее 1,5 м.",
+      "check_type": "min_dimension",
+      "metric": "ramp_width",
+      "unit": "m",
+      "min_value": 1.0,
+      "applies_to": ["residential", "commercial", "public", "medical", "educational"],
+      "error_template_uz": "Pandus kengligi {actual}m — me'yor bo'yicha kamida {required}m (ShNQ 2.07.02-22, §17)",
+      "error_template_ru": "Ширина пандуса {actual}м — по норме не менее {required}м (ШНК 2.07.02-22, §17)"
+    },
+
+    {
+      "id": "UZ-ACCESS-003",
+      "code": "ShNQ 2.07.02-22",
+      "clause": "§17",
+      "category": "inkluzivlik",
+      "severity": "high",
+      "title_uz": "Pandus boshlanishi va oxiridagi gorizontal maydoncha",
+      "title_ru": "Горизонтальная площадка у пандуса",
+      "description_uz": "Har bir pandusning boshi va oxirida aravachaning qiyinchiliksiz burilishiga imkon beruvchi, pандус kengligidan kam bo'lmagan va uzunligi kamida 1.5m bo'lgan gorizontal maydoncha bo'lishi shart.",
+      "description_ru": "У начала и конца каждого пандуса — горизонтальная площадка шириной не менее ширины пандуса и длиной не менее 1,5 м.",
+      "check_type": "min_dimension",
+      "metric": "ramp_landing_length",
+      "unit": "m",
+      "min_value": 1.5,
+      "applies_to": ["residential", "commercial", "public"],
+      "error_template_uz": "Pandus maydonchasi uzunligi {actual}m — me'yor bo'yicha kamida {required}m (ShNQ 2.07.02-22, §17)",
+      "error_template_ru": "Площадка пандуса {actual}м — по норме не менее {required}м (ШНК 2.07.02-22, §17)"
+    },
+
+    {
+      "id": "UZ-ACCESS-004",
+      "code": "ShNQ 2.07.02-22",
+      "clause": "§10",
+      "category": "inkluzivlik",
+      "severity": "high",
+      "title_uz": "Bino ichki yo'lak kengligi (nogironlar uchun)",
+      "title_ru": "Ширина внутреннего коридора для инвалидов",
+      "description_uz": "Bino ichki harakatlanish yo'laklarining nogironlar uchun minimal kengligi: qarama-qarshi yo'nalishda aravachalar o'tishi uchun 1.5m, bir tomonlama 1.0m dan kam bo'lmasligi shart.",
+      "description_ru": "Ширина внутренних коридоров для инвалидов: двустороннее движение — не менее 1,5 м, одностороннее — не менее 1,0 м.",
+      "check_type": "min_dimension",
+      "metric": "accessible_corridor_width",
+      "unit": "m",
+      "min_value": 1.5,
+      "min_value_one_way": 1.0,
+      "applies_to": ["residential", "commercial", "public", "medical", "educational"],
+      "error_template_uz": "Nogironlar yo'lagi kengligi {actual}m — me'yor bo'yicha kamida {required}m (ShNQ 2.07.02-22, §10)",
+      "error_template_ru": "Ширина коридора для инвалидов {actual}м — по норме не менее {required}м (ШНК 2.07.02-22, §10)"
+    },
+
+    {
+      "id": "UZ-ACCESS-005",
+      "code": "ShNQ 2.07.02-22",
+      "clause": "§11",
+      "category": "inkluzivlik",
+      "severity": "high",
+      "title_uz": "Trotuar bo'ylamasiga nishabligi",
+      "title_ru": "Продольный уклон тротуара",
+      "description_uz": "Trotuar va yo'lkalarning bo'ylamasiga qiyaligi 5% dan oshmasligi kerak. Ko'ndalangi 1-2%.",
+      "description_ru": "Продольный уклон тротуаров и дорожек не более 5%. Поперечный — 1-2%.",
+      "check_type": "max_ratio",
+      "metric": "sidewalk_slope_percent",
+      "unit": "%",
+      "max_value": 5.0,
+      "applies_to": ["site_planning"],
+      "error_template_uz": "Trotuar bo'ylamasiga nishabligi {actual}% — me'yor bo'yicha maksimal {required}% (ShNQ 2.07.02-22, §11)",
+      "error_template_ru": "Уклон тротуара {actual}% — по норме максимум {required}% (ШНК 2.07.02-22, §11)"
+    },
+
+    {
+      "id": "UZ-ACCESS-006",
+      "code": "ShNQ 2.07.02-22",
+      "clause": "§15",
+      "category": "inkluzivlik",
+      "severity": "medium",
+      "title_uz": "Ochiq zina kengligi (rельеф qiyaliklarida)",
+      "title_ru": "Ширина открытой лестницы (на рельефных уклонах)",
+      "description_uz": "Rельеф qiyaliklaridagi ochiq zina kengligi 1.6m dan kam bo'lmasligi, zina pog'onalari kengligi 0.4m dan kam bo'lmasligi, zina pog'onalari balandligi 0.12m dan oshmasligi kerak.",
+      "description_ru": "Ширина открытых лестниц на рельефе — не менее 1,6 м; ширина ступеней — не менее 0,4 м; высота ступеней — не более 0,12 м.",
+      "check_type": "combined",
+      "metrics": {
+        "stair_width_min_m": 1.6,
+        "step_tread_min_m": 0.4,
+        "step_riser_max_m": 0.12
+      },
+      "applies_to": ["site_planning"],
+      "error_template_uz": "Zina parametrlari me'yorda emas — kengligi kamida 1.6m, pog'ona kengi ≥0.4m, balandligi ≤0.12m (ShNQ 2.07.02-22, §15)",
+      "error_template_ru": "Параметры лестницы не соответствуют норме (ШНК 2.07.02-22, §15)"
+    },
+
+    {
+      "id": "UZ-ACCESS-007",
+      "code": "ShNQ 2.07.02-22",
+      "clause": "§26-27",
+      "category": "inkluzivlik",
+      "severity": "high",
+      "title_uz": "Nogironlar uchun avtoturargoh ulushi",
+      "title_ru": "Доля парковочных мест для инвалидов",
+      "description_uz": "Turar joy hududidagi avtoturargoh joylarining 2.5-3% nogironlar uchun ajratilishi shart. Jamoat binolari oldida: 10%. Tibbiy-ijtimoiy muassasalarda: 25%.",
+      "description_ru": "В жилых районах: 2,5–3% мест для инвалидов; перед общественными зданиями: 10%; в медицинских учреждениях: 25%.",
+      "check_type": "min_percent",
+      "metric": "accessible_parking_ratio",
+      "unit": "%",
+      "cases": [
+        { "building_type": "residential", "min_value": 2.5 },
+        { "building_type": "public", "min_value": 10.0 },
+        { "building_type": "medical", "min_value": 25.0 }
+      ],
+      "applies_to": ["residential", "public", "medical"],
+      "error_template_uz": "Nogironlar uchun ajratilgan joy: {actual}% — me'yor bo'yicha kamida {required}% (ShNQ 2.07.02-22, §26-27)",
+      "error_template_ru": "Мест для инвалидов {actual}% — по норме не менее {required}% (ШНК 2.07.02-22, §26-27)"
+    },
+
+    {
+      "id": "UZ-FIRE-EVAC-001",
+      "code": "ShNQ 2.01.02-04",
+      "clause": "Asosiy hujjat (ШНК 2.01.02-04)",
+      "category": "evakuatsiya",
+      "severity": "critical",
+      "title_uz": "Evakuatsiya eshigi minimal kengligi",
+      "title_ru": "Минимальная ширина эвакуационного выхода",
+      "description_uz": "Evakuatsiya yo'llaridagi eshiklarning minimal kengligi (net o'tish kengligi): turar joy xonadoni — 0.80m, jamoat binolari va koridorlar — 0.90m dan kam bo'lmasligi shart.",
+      "description_ru": "Минимальная ширина эвакуационных дверей: в жилых квартирах — 0,80 м; в коридорах общественных зданий — 0,90 м.",
+      "check_type": "min_dimension",
+      "metric": "evacuation_door_clear_width",
+      "unit": "m",
+      "cases": [
+        { "building_type": "residential_apartment", "min_value": 0.80 },
+        { "building_type": "public_corridor", "min_value": 0.90 },
+        { "building_type": "assembly_hall", "min_value": 1.20 }
+      ],
+      "applies_to": ["residential", "commercial", "public"],
+      "error_template_uz": "Evakuatsiya eshigi kengligi {actual}m — me'yor bo'yicha kamida {required}m (ShNQ 2.01.02-04)",
+      "error_template_ru": "Ширина эвакуационной двери {actual}м — по норме не менее {required}м (ШНК 2.01.02-04)"
+    },
+
+    {
+      "id": "UZ-FIRE-EVAC-002",
+      "code": "ShNQ 2.01.02-04",
+      "clause": "Ilova 1, §4.26",
+      "category": "evakuatsiya",
+      "severity": "high",
+      "title_uz": "Baland binolarda ochiq zinalar taqiqi",
+      "title_ru": "Запрет открытых лестниц в высотных зданиях",
+      "description_uz": "Baland bino (50m dan baland) ning baland qismida ochiq zinalarga (xonadonlar ichidagidan tashqari) ruxsat etilmaydi.",
+      "description_ru": "В высотной части здания (свыше 50 м) открытые лестницы (кроме квартирных) не допускаются.",
+      "check_type": "boolean",
+      "metric": "open_stair_in_highrise",
+      "condition": "must_be_false",
+      "applies_to": ["highrise"],
+      "building_height_min_m": 50,
+      "error_template_uz": "Baland binoda ochiq zina joylashtirilgan — ShNQ 2.01.02-04 §4.26 bo'yicha taqiqlanadi",
+      "error_template_ru": "В высотном здании обнаружена открытая лестница — запрещено по ШНК 2.01.02-04 §4.26"
+    },
+
+    {
+      "id": "UZ-PARKING-001",
+      "code": "ShNQ 2.08.01-19 + shaharsozlik talablari",
+      "clause": "Umumiy talablar",
+      "category": "avtoturargoh",
+      "severity": "high",
+      "title_uz": "Avtoturargoh: xonadon nisbati (turar-joy)",
+      "title_ru": "Норма парковочных мест на квартиру (жилой дом)",
+      "description_uz": "Turar-joy binosi uchun har 1 ta xonadon uchun kamida 1 ta avtoturargoh joyi bo'lishi shart (Toshkent shahri talabi). Shaharsozlik rejasiga ko'ra 1.2-1.5 joygacha talab qilinishi mumkin.",
+      "description_ru": "На 1 квартиру — не менее 1 парковочного места (требование г. Ташкент). По генплану может потребоваться 1,2–1,5 места.",
+      "check_type": "min_ratio",
+      "metric": "parking_per_apartment",
+      "unit": "places/apartment",
+      "min_value": 1.0,
+      "recommended_value": 1.2,
+      "applies_to": ["residential"],
+      "error_template_uz": "Avtoturargoh joylari: {actual_spots} ta/{total_apartments} xonadon ({ratio:.2f}) — me'yor bo'yicha kamida 1.0 (ShNQ 2.08.01-19)",
+      "error_template_ru": "Паркомест: {actual_spots}/{total_apartments} квартир ({ratio:.2f}) — по норме не менее 1,0 (ШНК 2.08.01-19)"
+    },
+
+    {
+      "id": "UZ-PARKING-002",
+      "code": "GOST + shaharsozlik talablari",
+      "clause": "Avtoturargoh o'lchami",
+      "category": "avtoturargoh",
+      "severity": "medium",
+      "title_uz": "Avtoturargoh joyi minimal o'lchami",
+      "title_ru": "Минимальные размеры парковочного места",
+      "description_uz": "Standart avtoturargoh joyi minimal o'lchami: kengligi ≥ 2.50m, uzunligi ≥ 5.00m.",
+      "description_ru": "Минимальный размер парковочного места: ширина ≥ 2,50 м, длина ≥ 5,00 м.",
+      "check_type": "min_dimension",
+      "metric": "parking_space_dimensions",
+      "min_width_m": 2.5,
+      "min_length_m": 5.0,
+      "applies_to": ["residential", "commercial", "public"],
+      "error_template_uz": "Avtoturargoh o'lchami {actual_w}×{actual_l}m — me'yor: kamida 2.5×5.0m",
+      "error_template_ru": "Размер паркоместа {actual_w}×{actual_l}м — по норме не менее 2,5×5,0 м"
+    },
+
+    {
+      "id": "UZ-CEILING-001",
+      "code": "ShNQ 2.08.01-19",
+      "clause": "Turar-joy xonalar balandligi",
+      "category": "sanitariya_gigiyena",
+      "severity": "high",
+      "title_uz": "Xonalar shift balandligi",
+      "title_ru": "Высота помещений",
+      "description_uz": "Turar joy binolarida xonalar shift balandligi (pol-shift): yangi qurilish — kamida 2.70m, rekonstruksiya — kamida 2.50m.",
+      "description_ru": "Высота помещений в жилых зданиях (пол-потолок): новое строительство — не менее 2,70 м; реконструкция — не менее 2,50 м.",
+      "check_type": "min_dimension",
+      "metric": "room_ceiling_height",
+      "unit": "m",
+      "cases": [
+        { "construction_type": "new", "min_value": 2.70 },
+        { "construction_type": "reconstruction", "min_value": 2.50 }
+      ],
+      "applies_to": ["residential"],
+      "error_template_uz": "Shift balandligi {actual}m — yangi qurilishda kamida 2.70m bo'lishi shart (ShNQ 2.08.01-19)",
+      "error_template_ru": "Высота потолка {actual}м — при новом строительстве не менее 2,70 м (ШНК 2.08.01-19)"
+    },
+
+    {
+      "id": "UZ-SEISMIC-001",
+      "code": "QMQ 2.01.03-19",
+      "clause": "Seysmika bo'yicha talablar",
+      "category": "seysmik_xavfsizlik",
+      "severity": "critical",
+      "title_uz": "Seysmik hududlar tasnifi (O'zbekiston shaharlari)",
+      "title_ru": "Сейсмические зоны городов Узбекистана",
+      "description_uz": "O'zbekistondagi asosiy shaharlarning seysmik balllik darajasi.",
+      "description_ru": "Сейсмичность основных городов Узбекистана.",
+      "check_type": "reference",
+      "metric": "seismic_zone",
+      "zones": {
+        "Toshkent": 9,
+        "Samarqand": 9,
+        "Buxoro": 8,
+        "Andijon": 9,
+        "Namangan": 9,
+        "Farg'ona": 8,
+        "Qarshi": 7,
+        "Termiz": 8,
+        "Nukus": 7,
+        "Urganch": 7,
+        "Navoiy": 8
+      },
+      "applies_to": ["all"],
+      "error_template_uz": "Loyiha seysmikasi: {city} uchun {required} ball — seysmik talablar bajarilishi SHART (QMQ 2.01.03-19)",
+      "error_template_ru": "Сейсмичность проекта: для {city} — {required} баллов — сейсмические требования ОБЯЗАТЕЛЬНЫ (КМК 2.01.03-19)"
+    },
+
+    {
+      "id": "UZ-SEISMIC-002",
+      "code": "QMQ 2.01.03-19",
+      "clause": "Deformatsiya choklari",
+      "category": "seysmik_xavfsizlik",
+      "severity": "high",
+      "title_uz": "Seysmik deformatsiya choklari (antiseysmic seam)",
+      "title_ru": "Антисейсмические швы",
+      "description_uz": "Seysmik hududlarda turli asosga ega bo'lgan yoki turli qavat sonli bino qismlarini seysmik deformatsiya choklari bilan ajratish majburiy. Chok kengligi hisoblama asosida aniqlanadi.",
+      "description_ru": "В сейсмических районах разновысокие или разноосноваемые части зданий разделяются антисейсмическими швами. Ширина шва определяется расчётом.",
+      "check_type": "presence",
+      "metric": "seismic_joint_presence",
+      "condition": "required_when_height_difference_exists",
+      "seismic_zones_applicable": [7, 8, 9],
+      "applies_to": ["residential", "commercial", "public"],
+      "error_template_uz": "Turli balandlikdagi bino qismlari uchun seysmik chok ko'rsatilmagan — QMQ 2.01.03-19 bo'yicha majburiy",
+      "error_template_ru": "Для разновысоких частей здания антисейсмический шов не показан — обязателен по КМК 2.01.03-19"
+    }
+
+  ],
+
+  "building_types": {
+    "residential": "Turar joy binolari (ko'p xonadonli)",
+    "commercial": "Tijorat binolari, ofislar",
+    "public": "Jamoat binolari va inshootlari",
+    "medical": "Tibbiy muassasalar",
+    "educational": "Ta'lim muassasalari",
+    "industrial": "Ishlab chiqarish binolari",
+    "highrise": "Baland binolar (50m dan ortiq)",
+    "site_planning": "Yer uchastkasi rejalashtirilishi"
+  },
+
+  "severity_levels": {
+    "critical": {
+      "uz": "Kritik — Ekspertiza albatta rad etadi",
+      "ru": "Критический — Экспертиза точно отклонит",
+      "color": "#FF0000",
+      "must_fix": true
+    },
+    "high": {
+      "uz": "Yuqori — Ko'pincha ekspertizada rad etiladi",
+      "ru": "Высокий — Часто приводит к отклонению",
+      "color": "#FF6600",
+      "must_fix": true
+    },
+    "medium": {
+      "uz": "O'rta — Tavsiya etiladi, tekshirilishi mumkin",
+      "ru": "Средний — Рекомендуется, может проверяться",
+      "color": "#FFA500",
+      "must_fix": false
+    },
+    "low": {
+      "uz": "Past — Yaxshi amaliyot, tavsiya etiladi",
+      "ru": "Низкий — Хорошая практика, рекомендуется",
+      "color": "#008000",
+      "must_fix": false
+    }
+  }
+}

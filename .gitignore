@@ -1,0 +1,131 @@
+# ==============================================================================
+# Me'morAI — Git Ignore Rules
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment Variables & Secret Credentials (ZERO LEAKAGE)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+secrets/
+credentials.json
+
+# ------------------------------------------------------------------------------
+# 2. Python & Bytecode
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# ------------------------------------------------------------------------------
+# 3. Node.js & Frontend
+# ------------------------------------------------------------------------------
+node_modules/
+.next/
+out/
+.nuxt/
+.vuepress/dist
+.serverless/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.turbo/
+
+# ------------------------------------------------------------------------------
+# 4. Storage, Uploads & Temporary Data
+# ------------------------------------------------------------------------------
+uploads/
+/uploads
+data/
+/data
+*.sqlite
+*.sqlite3
+*.db
+
+# CAD & Blueprint test files (katta hajmdagi fayllar)
+*.dwg
+*.dxf
+*.rvt
+*.ifc
+
+# ------------------------------------------------------------------------------
+# 5. Logs & Process IDs
+# ------------------------------------------------------------------------------
+logs/
+*.log
+*.pid
+*.seed
+*.pid.lock
+
+# ------------------------------------------------------------------------------
+# 6. Docker & Infrastructure Overrides
+# ------------------------------------------------------------------------------
+docker-compose.override.yml
+certbot/conf/
+certbot/www/
+
+# ------------------------------------------------------------------------------
+# 7. OS & Editor Artifacts
+# ------------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
