@@ -1,8 +1,9 @@
 """
 Me'morAI Demo Bot - Inline Klavyaturalar
 """
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 from texts import get_texts
+import config
 
 
 def get_language_keyboard() -> InlineKeyboardMarkup:
@@ -19,10 +20,17 @@ def get_language_keyboard() -> InlineKeyboardMarkup:
 
 
 def get_demo_checks_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
-    """4 ta demo tekshiruv turi va qo'shimcha tugmalar."""
+    """4 ta demo tekshiruv turi va Mini App tugmasi."""
     t = get_texts(lang)
+    mini_app_text = "🏛 Me'morAI (Mini App)" if lang == "uz" else "🏛 Me'morAI (Мини-приложение)"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=mini_app_text,
+                    web_app=WebAppInfo(url=config.WEBAPP_URL)
+                ),
+            ],
             [
                 InlineKeyboardButton(text=t.BTN_RAMP_SLOPE, callback_data="check:ramp_slope"),
             ],
@@ -45,15 +53,23 @@ def get_demo_checks_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
 
 def get_cta_keyboard(
     lang: str = "uz",
-    pro_url: str = "https://memore-ai.uz",
+    pro_url: str = None,
     contact_url: str = "https://t.me/asqarov_j"
 ) -> InlineKeyboardMarkup:
     """Natijadan keyingi Pro versiya va bog'lanish tugmalari."""
     t = get_texts(lang)
+    target_pro_url = pro_url or config.WEBAPP_URL
+    mini_app_text = "🏛 Mini App'ga o'tish" if lang == "uz" else "🏛 Открыть Мини-приложение"
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text=t.BTN_PRO_VERSION, url=pro_url),
+                InlineKeyboardButton(
+                    text=mini_app_text,
+                    web_app=WebAppInfo(url=config.WEBAPP_URL)
+                ),
+            ],
+            [
+                InlineKeyboardButton(text=t.BTN_PRO_VERSION, url=target_pro_url),
             ],
             [
                 InlineKeyboardButton(text=t.BTN_CONTACT, url=contact_url),

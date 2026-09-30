@@ -14,6 +14,7 @@ if str(RULES_PATH) not in sys.path:
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 import config
 from db import init_db
@@ -51,6 +52,19 @@ async def main() -> None:
     dp.include_router(demo_router)
     dp.include_router(cta_router)
 
+    # Telegram Chat pastki Menu Button (Mini App) ni o'rnatish
+    try:
+        if config.WEBAPP_URL:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="🏛 Me'morAI (Mini App)",
+                    web_app=WebAppInfo(url=config.WEBAPP_URL)
+                )
+            )
+            logger.info(f"✅ Telegram Chat Menu Button sozlandi: {config.WEBAPP_URL}")
+    except Exception as e:
+        logger.warning(f"Menu Button sozlashda ogohlantirish: {e}")
+
     # Botni ishga tushirish (polling)
     try:
         logger.info("🚀 Bot muvaffaqiyatli ishga tushdi va xabarlarni kutmoqda...")
@@ -65,4 +79,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot jarayoni yakunlandi.")
+        logger.info("Bot qo'lda to'xtatildi.")

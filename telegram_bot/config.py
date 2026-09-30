@@ -14,7 +14,8 @@ load_dotenv(ROOT_DIR / ".env")
 
 BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
 DATABASE_PATH: Path = BASE_DIR / os.getenv("DATABASE_PATH", "memore_demo_bot.db")
-PRO_PLATFORM_URL: str = os.getenv("PRO_PLATFORM_URL", "https://memore-ai.uz")
+WEBAPP_URL: str = os.getenv("WEBAPP_URL", "https://memore.62.171.143.55.sslip.io")
+PRO_PLATFORM_URL: str = os.getenv("PRO_PLATFORM_URL", WEBAPP_URL)
 CONTACT_URL: str = os.getenv("CONTACT_URL", "https://t.me/asqarov_j")
 
 # QMQ Rules Engine papkasi

@@ -12,6 +12,16 @@ services:
       - PORT=3000
     networks:
       - memore_net
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memore-landing-http.rule=Host(`memore.62.171.143.55.sslip.io`)"
+      - "traefik.http.routers.memore-landing-http.entrypoints=http"
+      - "traefik.http.routers.memore-landing.rule=Host(`memore.62.171.143.55.sslip.io`)"
+      - "traefik.http.routers.memore-landing.entrypoints=https"
+      - "traefik.http.routers.memore-landing.tls=true"
+      - "traefik.http.routers.memore-landing.tls.certresolver=letsencrypt"
+      - "traefik.http.services.memore-landing.loadbalancer.server.port=3000"
 
   bot:
     build:
@@ -46,6 +56,14 @@ services:
       retries: 3
     networks:
       - memore_net
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.memore-api.rule=Host(`api-memore.62.171.143.55.sslip.io`)"
+      - "traefik.http.routers.memore-api.entrypoints=https"
+      - "traefik.http.routers.memore-api.tls=true"
+      - "traefik.http.routers.memore-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.memore-api.loadbalancer.server.port=8000"
 
 volumes:
   uploads_data:
@@ -59,3 +77,5 @@ networks:
   memore_net:
     name: memore_network
     driver: bridge
+  coolify:
+    external: true
