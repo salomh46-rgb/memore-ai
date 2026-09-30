@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useRef, useEffect, MouseEvent, TouchEvent } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Layers, RotateCw, ZoomIn, ZoomOut, Scissors, SplitSquareVertical,
-  Building, Compass, Flame, Accessibility, Activity, Maximize2, RefreshCw
+  Building2, Layers, Activity, ShieldCheck, ShieldAlert,
+  Flame, Accessibility, Ruler, Eye, ArrowRight, RefreshCw, Zap
 } from "lucide-react";
 
 interface BIMViewerProps {
@@ -26,75 +26,26 @@ export default function HolographicBIMViewer({
   fireRoadWidth,
   activeLayer,
   setActiveLayer,
-  floorsCount = 6,
+  floorsCount = 8,
 }: BIMViewerProps) {
-  // 1. 360° Interaktiv 3D Orbit Holati
-  const [rotX, setRotX] = useState<number>(24);
-  const [rotY, setRotY] = useState<number>(-32);
-  const [zoom, setZoom] = useState<number>(1);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
-  const lastMousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-
-  // 2. Kinematik Rejimlar: Exploded View & Section Cut A-A
+  // 4 xil konstruktiv tizim (2-rasmdagi kabi)
+  const [structuralSystem, setStructuralSystem] = useState<"shear" | "braced" | "tube" | "outrigger">("shear");
+  const [showLateralLoads, setShowLateralLoads] = useState<boolean>(true);
   const [isExploded, setIsExploded] = useState<boolean>(false);
-  const [isSectionCut, setIsSectionCut] = useState<boolean>(false);
-  const [sectionOffset, setSectionOffset] = useState<number>(50); // Kesim joylashuvi (%)
 
   const isRampError = rampSlope > 8.33;
   const isCeilingError = ceilingHeight < 2.70;
   const isFireError = fireRoadWidth < 6.0;
 
-  // Qavatlar balandligining parametrik hisobi
-  const floorHeightPx = Math.max(28, Math.min(52, ceilingHeight * 14));
-  const visibleFloors = Math.min(10, Math.max(3, floorsCount));
-
-  // Sichqoncha va sensorli aylantirish hodisalari (360° Orbit)
-  const handleMouseDown = (e: MouseEvent) => {
-    setIsDragging(true);
-    lastMousePos.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleMouseMove = (e: MouseEvent) => {
-    if (!isDragging) return;
-    const deltaX = e.clientX - lastMousePos.current.x;
-    const deltaY = e.clientY - lastMousePos.current.y;
-    setRotY((prev) => (prev + deltaX * 0.6) % 360);
-    setRotX((prev) => Math.max(-10, Math.min(75, prev - deltaY * 0.5)));
-    lastMousePos.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleMouseUp = () => setIsDragging(false);
-
-  // Sensorli ekranlar (Smartfon / Telegram WebApp Touch)
-  const handleTouchStart = (e: TouchEvent) => {
-    if (e.touches.length === 1) {
-      setIsDragging(true);
-      lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-    }
-  };
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return;
-    const deltaX = e.touches[0].clientX - lastMousePos.current.x;
-    const deltaY = e.touches[0].clientY - lastMousePos.current.y;
-    setRotY((prev) => (prev + deltaX * 0.7) % 360);
-    setRotX((prev) => Math.max(-10, Math.min(75, prev - deltaY * 0.6)));
-    lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  };
-
-  const handleTouchEnd = () => setIsDragging(false);
-
-  // Avtomatik qayta tiklash
-  const resetCamera = () => {
-    setRotX(24);
-    setRotY(-32);
-    setZoom(1);
-    setIsExploded(false);
-    setIsSectionCut(false);
-  };
+  // Qavatlar soni va geometriyasi
+  const visibleFloors = Math.min(12, Math.max(4, floorsCount));
+  const floorHeightSvg = 26; // har bir qavat balandligi px
+  const buildingHeightSvg = visibleFloors * floorHeightSvg;
+  const groundY = 320;
+  const buildingTopY = groundY - buildingHeightSvg;
 
   return (
-    <div className="relative w-full rounded-3xl bg-[#020617] border border-cyan-500/25 overflow-hidden shadow-[0_0_60px_rgba(6,182,212,0.15)] select-none">
+    <div className="relative w-full rounded-3xl bg-[#020617] border border-cyan-500/30 overflow-hidden shadow-[0_0_60px_rgba(6,182,212,0.18)] select-none">
       {/* 2026 Arxitektura Millimetrovka Grid Foni */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-20"
@@ -103,259 +54,336 @@ export default function HolographicBIMViewer({
             linear-gradient(to right, rgba(6,182,212,0.2) 1px, transparent 1px),
             linear-gradient(to bottom, rgba(6,182,212,0.2) 1px, transparent 1px)
           `,
-          backgroundSize: "28px 28px"
+          backgroundSize: "24px 24px"
         }}
       />
 
-      {/* Yuqori Boshqaruv & Arxitektura Rejimlari Paneli */}
-      <div className="relative z-20 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/20 bg-black/50 backdrop-blur-md">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-            <Building size={20} />
-          </div>
+      {/* YUQORI BOSHQARUV: 4 TA ARXITEKTURA KONSTRUKTIV TIZIMI (2-rasmdagi kabi) */}
+      <div className="relative z-20 p-4 sm:p-5 border-b border-cyan-500/20 bg-black/60 backdrop-blur-md">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white tracking-wider font-mono">
-                BIM 3D Kinematic Studio
+              <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-cyan-400">
+                <Building2 size={18} />
+              </div>
+              <h3 className="text-sm sm:text-base font-bold text-white font-mono tracking-wide uppercase">
+                High-Rise Structural BIM Model (QMQ 2.01.03-19)
               </h3>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30">
-                LOD 400
-              </span>
             </div>
-            <p className="text-[11px] text-cyan-400/80 font-mono">
-              Orbit: {Math.round(rotY)}° Yaw, {Math.round(rotX)}° Pitch • {visibleFloors} Qavat ({selectedCity})
+            <p className="text-xs text-cyan-400/80 font-mono mt-0.5">
+              Konstruktiv tizim: <span className="text-white font-bold">{
+                structuralSystem === "shear" ? "1. Shear Wall Core (Markaziy Monolit Yadro)" :
+                structuralSystem === "braced" ? "2. Braced Frame (Diagonal Bog'lamli Karkas)" :
+                structuralSystem === "tube" ? "3. Tube System (Perimetral Qobiq Ustunlar)" :
+                "4. Core-and-Outrigger (Yadro va Autriger Fermalar)"
+              }</span> • {visibleFloors} Qavat ({selectedCity} - 9 ball)
             </p>
+          </div>
+
+          {/* 4 Ta Tizim Selektori */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 w-full lg:w-auto bg-black/50 p-1.5 rounded-2xl border border-cyan-500/25">
+            {[
+              { id: "shear", num: "1", title: "Shear Core", sub: "Yadro" },
+              { id: "braced", num: "2", title: "Braced", sub: "Bog'lam" },
+              { id: "tube", num: "3", title: "Tube", sub: "Qobiq" },
+              { id: "outrigger", num: "4", title: "Outrigger", sub: "Autriger" },
+            ].map((sys) => {
+              const active = structuralSystem === sys.id;
+              return (
+                <button
+                  key={sys.id}
+                  onClick={() => setStructuralSystem(sys.id as any)}
+                  className={`flex flex-col items-center justify-center px-2.5 py-1.5 rounded-xl font-mono text-xs transition-all ${
+                    active
+                      ? "bg-cyan-500/25 border border-cyan-400 text-cyan-200 shadow-[0_0_15px_rgba(6,182,212,0.35)]"
+                      : "text-slate-400 hover:text-white hover:bg-white/5 border border-transparent"
+                  }`}
+                >
+                  <span className="font-bold text-[11px]">{sys.num}. {sys.title}</span>
+                  <span className="text-[9px] text-slate-400">{sys.sub}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* 4 TA KINEMATIK REJIM TUGMALARI */}
-        <div className="flex items-center flex-wrap gap-2">
-          {/* Exploded View Tugmasi */}
-          <button
-            onClick={() => setIsExploded(!isExploded)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
-              isExploded 
-                ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.4)]" 
-                : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-cyan-500/40"
-            }`}
-            title="Qavatlarni havoda ajratib ko'rsatish"
-          >
-            <SplitSquareVertical size={14} className={isExploded ? "animate-bounce" : ""} />
-            <span>Exploded BIM</span>
-          </button>
+        {/* Rejimlar & Qatlamlar Qatori */}
+        <div className="flex items-center justify-between flex-wrap gap-2 mt-3 pt-3 border-t border-cyan-500/10">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsExploded(!isExploded)}
+              className={`px-3 py-1 rounded-lg text-xs font-mono transition-all border ${
+                isExploded 
+                  ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]" 
+                  : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              {isExploded ? "▼ Qavatlarni Yig'ish" : "▲ Exploded View (Ajratish)"}
+            </button>
 
-          {/* Section Cut A-A Tugmasi */}
-          <button
-            onClick={() => setIsSectionCut(!isSectionCut)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
-              isSectionCut 
-                ? "bg-rose-500/20 border-rose-500 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.4)]" 
-                : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-cyan-500/40"
-            }`}
-            title="Lazerli arxitektura kesimi"
-          >
-            <Scissors size={14} className={isSectionCut ? "rotate-90" : ""} />
-            <span>Kesim A-A</span>
-          </button>
+            <button
+              onClick={() => setShowLateralLoads(!showLateralLoads)}
+              className={`px-3 py-1 rounded-lg text-xs font-mono transition-all border ${
+                showLateralLoads 
+                  ? "bg-blue-500/20 border-blue-400 text-blue-300" 
+                  : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              {showLateralLoads ? "⚡ Seysmik Kuchlar: Faol" : "Seysmik Kuchlar: O'chiq"}
+            </button>
+          </div>
 
-          {/* Zoom & Reset */}
-          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-0.5">
-            <button
-              onClick={() => setZoom((z) => Math.min(1.5, z + 0.15))}
-              className="p-1.5 text-slate-300 hover:text-cyan-300 rounded-lg"
-              title="Kattalashtirish"
-            >
-              <ZoomIn size={14} />
-            </button>
-            <button
-              onClick={() => setZoom((z) => Math.max(0.65, z - 0.15))}
-              className="p-1.5 text-slate-300 hover:text-cyan-300 rounded-lg"
-              title="Kichraytirish"
-            >
-              <ZoomOut size={14} />
-            </button>
-            <button
-              onClick={resetCamera}
-              className="p-1.5 text-slate-300 hover:text-amber-400 rounded-lg"
-              title="Kamerani boshlang'ich holatga qaytarish"
-            >
-              <RefreshCw size={14} />
-            </button>
+          <div className="text-[11px] font-mono text-slate-400">
+            Shift balandligi: <span className={isCeilingError ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>{ceilingHeight}m</span> • Pandus: <span className={isRampError ? "text-rose-400 font-bold" : "text-emerald-400 font-bold"}>{rampSlope}%</span>
           </div>
         </div>
       </div>
 
-      {/* 3D INTERAKTIV SAHNA (3D Perspective Viewport) */}
-      <div 
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        className="relative z-10 h-80 sm:h-[420px] w-full flex items-center justify-center cursor-grab active:cursor-grabbing overflow-hidden"
-        style={{ perspective: "1100px" }}
-      >
+      {/* ASOSIY 2D/3D BIM KONSTRUKTIV CHIZMA SAHNASI (Aynan 2-rasmga o'xshash) */}
+      <div className="relative z-10 w-full min-h-[460px] sm:min-h-[500px] flex items-center justify-center p-2 sm:p-6 overflow-hidden">
         {/* Lazerli Skanerlash Chizig'i (Scan Beam) */}
         {isScanning && (
           <motion.div
-            initial={{ top: "-10%" }}
-            animate={{ top: "110%" }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }}
-            className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent z-40 pointer-events-none shadow-[0_0_30px_#22d3ee]"
+            initial={{ top: "0%" }}
+            animate={{ top: "100%" }}
+            transition={{ duration: 2.2, repeat: Infinity, ease: "linear" }}
+            className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent z-40 pointer-events-none shadow-[0_0_25px_#22d3ee]"
           >
-            <div className="w-full h-32 bg-gradient-to-b from-cyan-400/25 to-transparent -translate-y-full" />
+            <div className="w-full h-28 bg-gradient-to-b from-cyan-400/20 to-transparent -translate-y-full" />
           </motion.div>
         )}
 
-        {/* Kesim Lazer Tekisligi (Section Cut Plane) */}
-        {isSectionCut && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="absolute inset-y-0 w-1 bg-rose-500/70 z-30 pointer-events-none shadow-[0_0_30px_#f43f5e]"
-            style={{ left: `${sectionOffset}%` }}
-          >
-            <div className="absolute top-4 left-2 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500 text-rose-300 text-[10px] font-mono whitespace-nowrap">
-              Kesim A-A (X={sectionOffset}m)
-            </div>
-          </motion.div>
-        )}
-
-        {/* 3D BINO MODELI (CSS 3D Transforms) */}
-        <motion.div
-          animate={{
-            rotateX: rotX,
-            rotateY: rotY,
-            scale: zoom,
-          }}
-          transition={{ type: "spring", stiffness: 220, damping: 25 }}
-          style={{ transformStyle: "preserve-3d" }}
-          className="relative w-56 sm:w-64 h-56 sm:h-64 flex items-center justify-center"
+        {/* SVG ARXITEKTURA VA KONSTRUKSIYA CHIZMASI */}
+        <svg 
+          viewBox="0 0 760 480" 
+          className="w-full h-full max-h-[460px] drop-shadow-2xl"
         >
-          {/* 1. ZAMIN VA KADASTR TEKISLIGI (Ground Grid Plane) */}
-          <div 
-            style={{
-              transform: `rotateX(90deg) translateZ(-80px)`,
-              transformStyle: "preserve-3d",
-            }}
-            className="absolute w-80 sm:w-96 h-80 sm:h-96 rounded-3xl border border-cyan-500/30 bg-cyan-950/20 shadow-[0_0_50px_rgba(6,182,212,0.15)] flex items-center justify-center"
-          >
-            {/* Koordinata markazi */}
-            <div className="w-full h-[1px] bg-cyan-500/40 absolute" />
-            <div className="h-full w-[1px] bg-cyan-500/40 absolute" />
-            <span className="absolute bottom-2 right-4 text-[10px] font-mono text-cyan-400">
-              KADASTR: {selectedCity} (48m × 36m)
-            </span>
+          <defs>
+            {/* Lazer nurlar filtri */}
+            <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <filter id="glow-core" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="5" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+            <linearGradient id="core-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#0284c7" stopOpacity="0.8" />
+              <stop offset="50%" stopColor="#0369a1" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#075985" stopOpacity="0.8" />
+            </linearGradient>
+            <linearGradient id="ground-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="#451a03" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#1c1917" stopOpacity="0.9" />
+            </linearGradient>
+          </defs>
 
-            {/* Yong'in Yo'li Perimetri */}
-            <div 
-              className={`absolute inset-4 rounded-2xl border-2 transition-colors ${
-                isFireError 
-                  ? "border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.4)] border-dashed animate-pulse" 
-                  : "border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
-              }`}
-            >
-              <span className={`absolute -top-3 left-4 px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
-                isFireError ? "bg-rose-950 border border-rose-500 text-rose-300" : "bg-emerald-950 border border-emerald-500 text-emerald-300"
-              }`}>
-                Yong'in yo'li: {fireRoadWidth}m {isFireError ? "(QOIDABUZARLIK)" : "(OK)"}
-              </span>
-            </div>
+          {/* 1. SEIZMIK LATERAL LOADS (Chap tomondan keluvchi gorizontal seysmik yuklar - 2-rasmdagi kabi) */}
+          {showLateralLoads && (
+            <g className="animate-pulse">
+              <text x="70" y="70" fill="#38bdf8" fontSize="12" fontFamily="monospace" fontWeight="bold">
+                LATERAL LOADS
+              </text>
+              <text x="70" y="85" fill="#94a3b8" fontSize="10" fontFamily="monospace">
+                (9 Ball Seysmik / Shamol)
+              </text>
+              {Array.from({ length: 6 }).map((_, i) => {
+                const yPos = 110 + i * 36;
+                return (
+                  <g key={i}>
+                    <line x1="80" y1={yPos} x2="165" y2={yPos} stroke="#38bdf8" strokeWidth="2.5" />
+                    <polygon points={`175,${yPos} 162,${yPos - 5} 162,${yPos + 5}`} fill="#38bdf8" />
+                  </g>
+                );
+              })}
+            </g>
+          )}
 
-            {/* Inkluziv Pandus Zonasi */}
-            <div 
-              className={`absolute -bottom-6 left-12 w-28 h-10 rounded-lg border-2 transition-all ${
-                isRampError 
-                  ? "border-rose-500 bg-rose-950/60 shadow-[0_0_20px_rgba(244,63,94,0.5)]" 
-                  : "border-cyan-400 bg-cyan-950/60 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
-              }`}
-            >
-              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white">
-                Pandus {rampSlope}%
-              </span>
-            </div>
-          </div>
+          {/* 2. ZAMIN VA SVAYALI POYDEVOR (Soil & Pile Foundation - 2-rasmdagi kabi) */}
+          <g>
+            {/* Grunt qatlami */}
+            <rect x="180" y="340" width="380" height="85" fill="url(#ground-gradient)" stroke="#78350f" strokeWidth="1.5" />
+            <text x="190" y="415" fill="#a8a29e" fontSize="10" fontFamily="monospace">
+              GRUNT & SEYSMIK POYDEVOR ASOSI (ShNQ 2.02.01)
+            </text>
 
-          {/* 2. PARAMETRIK QAVATLAR (Exploded View & Morphing) */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ transformStyle: "preserve-3d" }}>
+            {/* Temir-beton Svayalar (Piles) */}
+            {[210, 245, 280, 315, 350, 385, 420, 455, 490, 525].map((pileX, idx) => (
+              <g key={idx}>
+                <rect x={pileX} y="355" width="10" height="60" fill="#94a3b8" stroke="#cbd5e1" strokeWidth="1" />
+                <line x1={pileX} y1="365" x2={pileX + 10} y2="375" stroke="#475569" strokeWidth="1" />
+                <line x1={pileX} y1="385" x2={pileX + 10} y2="395" stroke="#475569" strokeWidth="1" />
+              </g>
+            ))}
+
+            {/* Monolit Poydevor Plitasi (Raft Slab) */}
+            <rect x="190" y="325" width="360" height="20" fill="#64748b" stroke="#cbd5e1" strokeWidth="2" />
+            <text x="320" y="339" fill="#0f172a" fontSize="10" fontFamily="monospace" fontWeight="bold">
+              MONOLIT POYDEVOR PLITASI (RAFT SLAB)
+            </text>
+          </g>
+
+          {/* 3. BINO ASOSIY KARKASI VA QAVATLARI */}
+          <g id="building-structure">
+            {/* Binoning Tashqi Vertikal Karkas Ustunlari */}
+            <line x1="220" y1="325" x2="220" y2={buildingTopY} stroke="#38bdf8" strokeWidth="3" />
+            <line x1="520" y1="325" x2="520" y2={buildingTopY} stroke="#38bdf8" strokeWidth="3" />
+
+            {/* Markaziy Yadro (Central Shear Wall Core / Lift Shaxtasi - 2-rasmdagi ko'k ustun) */}
+            <rect 
+              x="330" 
+              y={buildingTopY} 
+              width="80" 
+              height={buildingHeightSvg} 
+              fill="url(#core-gradient)" 
+              stroke="#0284c7" 
+              strokeWidth="2.5"
+              filter="url(#glow-core)"
+            />
+            {/* Yadro ichidagi lift & xonadon chiziqlari */}
+            {Array.from({ length: visibleFloors }).map((_, idx) => (
+              <line 
+                key={`core-line-${idx}`} 
+                x1="330" 
+                y1={buildingTopY + idx * floorHeightSvg} 
+                x2="410" 
+                y2={buildingTopY + idx * floorHeightSvg} 
+                stroke="#38bdf8" 
+                strokeWidth="1" 
+                strokeOpacity="0.4"
+              />
+            ))}
+            <text x="340" y={buildingTopY + 20} fill="#ffffff" fontSize="9" fontFamily="monospace" fontWeight="bold">
+              CORE
+            </text>
+
+            {/* Qavatlar va Orayopma Plitalari (Floor Slabs & Columns) */}
             {Array.from({ length: visibleFloors }).map((_, idx) => {
-              const floorNum = idx + 1;
-              const isTopFloor = floorNum === visibleFloors;
-
-              // Exploded view da har bir qavat orasidagi vertikal masofa
-              const explodedGap = isExploded ? idx * 45 : 0;
-              const zLevel = -60 + (idx * floorHeightPx) + explodedGap;
+              const floorIndexFromBottom = visibleFloors - idx;
+              // Exploded view da qavatlar havoga ajraladi
+              const explodedShift = isExploded ? (visibleFloors - 1 - idx) * 8 : 0;
+              const yLevel = buildingTopY + idx * floorHeightSvg - explodedShift;
 
               return (
-                <motion.div
-                  key={floorNum}
-                  initial={false}
-                  animate={{
-                    transform: `translateZ(${zLevel}px)`,
-                  }}
-                  transition={{ type: "spring", stiffness: 180, damping: 22 }}
-                  style={{ transformStyle: "preserve-3d" }}
-                  className={`absolute w-44 sm:w-52 h-44 sm:h-52 rounded-2xl border-2 transition-all duration-300 ${
-                    isTopFloor 
-                      ? "border-cyan-400 bg-cyan-500/25 shadow-[0_0_35px_rgba(6,182,212,0.4)]" 
-                      : "border-sky-500/50 bg-[#0f172a]/80 shadow-[0_0_20px_rgba(14,165,233,0.15)]"
-                  } ${isSectionCut ? "border-r-rose-500 border-r-4" : ""}`}
-                >
-                  {/* Qavat raqami va Lazer marker */}
-                  <div className="absolute top-2 left-2 flex items-center gap-1.5 font-mono text-[10px] text-cyan-300">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
-                    <span>L{floorNum} ({idx === 0 ? "Kirish" : isTopFloor ? "Tom" : "Turar"})</span>
-                  </div>
+                <g key={`floor-${idx}`}>
+                  {/* Orayopma Plitasi (Concrete Slab) */}
+                  <rect 
+                    x="215" 
+                    y={yLevel} 
+                    width="310" 
+                    height="5" 
+                    fill="#cbd5e1" 
+                    stroke="#94a3b8" 
+                    strokeWidth="1" 
+                  />
 
-                  {/* Shift Balandligi Ko'rsatkichi (Faqat 1-2 qavatda) */}
-                  {idx === 1 && (
-                    <div className="absolute right-2 top-2 px-2 py-0.5 rounded bg-black/70 border border-cyan-500/30 text-[10px] font-mono">
-                      <span className={isCeilingError ? "text-rose-400 font-bold" : "text-cyan-300"}>
-                        H={ceilingHeight}m {isCeilingError ? "(≤2.7m Xato)" : ""}
-                      </span>
-                    </div>
-                  )}
+                  {/* Qavatlararo Vertikal Ustunlar (Columns Grid) */}
+                  <line x1="260" y1={yLevel + 5} x2="260" y2={yLevel + floorHeightSvg} stroke="#0284c7" strokeWidth="2" strokeDasharray={structuralSystem === "tube" ? "none" : "3 1"} />
+                  <line x1="300" y1={yLevel + 5} x2="300" y2={yLevel + floorHeightSvg} stroke="#0284c7" strokeWidth="2" strokeDasharray={structuralSystem === "tube" ? "none" : "3 1"} />
+                  <line x1="440" y1={yLevel + 5} x2="440" y2={yLevel + floorHeightSvg} stroke="#0284c7" strokeWidth="2" strokeDasharray={structuralSystem === "tube" ? "none" : "3 1"} />
+                  <line x1="480" y1={yLevel + 5} x2="480" y2={yLevel + floorHeightSvg} stroke="#0284c7" strokeWidth="2" strokeDasharray={structuralSystem === "tube" ? "none" : "3 1"} />
 
-                  {/* Ichki Xonalar va Ustunlar To'ri (Section Kesimda Ko'rinadi) */}
-                  {isSectionCut && (
-                    <div className="absolute inset-2 border border-rose-500/40 rounded-lg flex items-center justify-center font-mono text-[10px] text-rose-300 bg-rose-950/20">
-                      <span>Xonadon 3A • Koridor 1.8m</span>
-                    </div>
-                  )}
-
-                  {/* 4 Burchak Ustunlari (Structural BIM Columns) */}
-                  <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-                  <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-                  <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
-                </motion.div>
+                  {/* Qavat Belgisi (L1, L2, L3...) */}
+                  <text x="195" y={yLevel + 16} fill="#64748b" fontSize="9" fontFamily="monospace">
+                    L{floorIndexFromBottom}
+                  </text>
+                </g>
               );
             })}
 
-            {/* Antiseysmik Belbog' Qatlami (QMQ 2.01.03) */}
-            <motion.div
-              animate={{
-                transform: `translateZ(${-60 + (visibleFloors * floorHeightPx) + (isExploded ? visibleFloors * 45 : 0) + 20}px)`,
-              }}
-              style={{ transformStyle: "preserve-3d" }}
-              className="absolute w-48 sm:w-56 h-48 sm:h-56 rounded-2xl border-2 border-purple-500 border-dashed shadow-[0_0_30px_rgba(168,85,247,0.4)] pointer-events-none flex items-center justify-center"
-            >
-              <span className="text-[10px] font-mono text-purple-300 bg-black/80 px-2 py-0.5 rounded border border-purple-500/40">
-                Seysmik chok va karkas ({selectedCity} - 9 ball)
-              </span>
-            </motion.div>
-          </div>
-        </motion.div>
+            {/* 4. KONSTRUKTIV TIZIM BO'YICHA XUSUSIY ELEMENTLAR (2-rasmdagi kabi) */}
 
-        {/* Sahna Pastidagi Arxitektor Maslahati */}
-        <div className="absolute bottom-3 left-4 text-[10px] font-mono text-cyan-400/80 bg-black/70 border border-cyan-500/20 px-3 py-1.5 rounded-xl backdrop-blur flex items-center gap-2 pointer-events-none">
-          <RotateCw size={13} className="animate-spin" style={{ animationDuration: "12s" }} />
-          <span>Binoni barmoq yoki sichqoncha bilan 360° aylantirishingiz mumkin</span>
+            {/* 2. BRACED FRAME: Diagonal Seysmik Bog'lamlar (X-Bracing) */}
+            {structuralSystem === "braced" && (
+              <g stroke="#38bdf8" strokeWidth="2" strokeOpacity="0.8">
+                {Array.from({ length: Math.floor(visibleFloors / 2) }).map((_, i) => {
+                  const y1 = buildingTopY + i * (floorHeightSvg * 2);
+                  const y2 = y1 + floorHeightSvg * 2;
+                  return (
+                    <g key={`brace-${i}`}>
+                      {/* Chap panel X-bog'lam */}
+                      <line x1="220" y1={y1} x2="330" y2={y2} />
+                      <line x1="330" y1={y1} x2="220" y2={y2} />
+                      {/* O'ng panel X-bog'lam */}
+                      <line x1="410" y1={y1} x2="520" y2={y2} />
+                      <line x1="520" y1={y1} x2="410" y2={y2} />
+                    </g>
+                  );
+                })}
+              </g>
+            )}
+
+            {/* 3. TUBE SYSTEM: Zich Perimetral Fasad Ustunlari */}
+            {structuralSystem === "tube" && (
+              <g stroke="#38bdf8" strokeWidth="2.5">
+                {[220, 235, 250, 265, 280, 295, 310, 325, 415, 430, 445, 460, 475, 490, 505, 520].map((colX) => (
+                  <line key={colX} x1={colX} y1="325" x2={colX} y2={buildingTopY} stroke="#0ea5e9" strokeOpacity="0.7" />
+                ))}
+              </g>
+            )}
+
+            {/* 4. CORE-AND-OUTRIGGER: Autriger Fermalar (Outrigger Trusses) */}
+            {structuralSystem === "outrigger" && (
+              <g>
+                {/* O'rta qavat autriger ferma */}
+                <rect x="220" y={buildingTopY + Math.floor(visibleFloors / 2) * floorHeightSvg} width="300" height="22" fill="#0369a1" fillOpacity="0.4" stroke="#38bdf8" strokeWidth="2" />
+                <line x1="220" y1={buildingTopY + Math.floor(visibleFloors / 2) * floorHeightSvg} x2="330" y2={buildingTopY + Math.floor(visibleFloors / 2) * floorHeightSvg + 22} stroke="#f59e0b" strokeWidth="2" />
+                <line x1="410" y1={buildingTopY + Math.floor(visibleFloors / 2) * floorHeightSvg} x2="520" y2={buildingTopY + Math.floor(visibleFloors / 2) * floorHeightSvg + 22} stroke="#f59e0b" strokeWidth="2" />
+                {/* Tom qavat autriger ferma */}
+                <rect x="220" y={buildingTopY} width="300" height="22" fill="#0369a1" fillOpacity="0.4" stroke="#38bdf8" strokeWidth="2" />
+                <line x1="220" y1={buildingTopY} x2="330" y2={buildingTopY + 22} stroke="#f59e0b" strokeWidth="2" />
+                <line x1="410" y1={buildingTopY} x2="520" y2={buildingTopY + 22} stroke="#f59e0b" strokeWidth="2" />
+              </g>
+            )}
+          </g>
+
+          {/* 5. ARXITEKTURA ME'YORIY CALLOUTS (Ko'rsatkichlar & Xatolar) */}
+          <g>
+            {/* Shift Balandligi Ko'rsatkichi */}
+            <g transform={`translate(535, ${buildingTopY + 40})`}>
+              <line x1="0" y1="0" x2="25" y2="0" stroke={isCeilingError ? "#f43f5e" : "#38bdf8"} strokeWidth="1.5" />
+              <rect x="25" y="-12" width="165" height="26" rx="6" fill="#020617" stroke={isCeilingError ? "#f43f5e" : "#0284c7"} strokeWidth="1.5" />
+              <text x="32" y="5" fill={isCeilingError ? "#fda4af" : "#bae6fd"} fontSize="10" fontFamily="monospace" fontWeight="bold">
+                Shift: H={ceilingHeight}m {isCeilingError ? "(≤2.7m XATO!)" : "(≥2.7m OK)"}
+              </text>
+            </g>
+
+            {/* Inkluziv Kirish Pandusi (ShNQ 2.07.02-22) */}
+            <g transform="translate(140, 310)">
+              {/* Pandus qiyaligi chizig'i */}
+              <polygon points="0,15 50,0 50,15" fill={isRampError ? "#ef4444" : "#10b981"} fillOpacity="0.4" stroke={isRampError ? "#f43f5e" : "#10b981"} strokeWidth="2" />
+              <line x1="25" y1="7" x2="25" y2="-20" stroke={isRampError ? "#f43f5e" : "#10b981"} strokeWidth="1.5" />
+              <rect x="-30" y="-45" width="160" height="24" rx="6" fill="#020617" stroke={isRampError ? "#f43f5e" : "#10b981"} strokeWidth="1.5" />
+              <text x="-24" y="-30" fill={isRampError ? "#fda4af" : "#6ee7b7"} fontSize="10" fontFamily="monospace" fontWeight="bold">
+                Pandus {rampSlope}% {isRampError ? "(Tik! ShNQ 2.07)" : "(≤8.33% OK)"}
+              </text>
+            </g>
+
+            {/* Yong'in Yo'li Eni (ShNQ 2.01.02-04) */}
+            <g transform="translate(535, 315)">
+              <line x1="0" y1="0" x2="35" y2="0" stroke={isFireError ? "#f43f5e" : "#10b981"} strokeWidth="2" />
+              <rect x="35" y="-12" width="165" height="26" rx="6" fill="#020617" stroke={isFireError ? "#f43f5e" : "#10b981"} strokeWidth="1.5" />
+              <text x="42" y="5" fill={isFireError ? "#fda4af" : "#6ee7b7"} fontSize="10" fontFamily="monospace" fontWeight="bold">
+                Yong'in yo'li: {fireRoadWidth}m {isFireError ? "(≤6m XATO)" : "(≥6m OK)"}
+              </text>
+            </g>
+          </g>
+        </svg>
+
+        {/* Konstruktiv Tizim Xulosasi Legendasi (Pastki burchak) */}
+        <div className="absolute bottom-3 left-4 text-[10px] font-mono text-cyan-400/90 bg-black/80 border border-cyan-500/25 px-3 py-1.5 rounded-xl backdrop-blur flex items-center gap-2">
+          <Activity size={14} className="text-cyan-400" />
+          <span>
+            {structuralSystem === "shear" && "Shear Wall Core: Lift va zinapoya monolit yadrosi barcha gorizontal seysmik kuchlarni qabul qiladi."}
+            {structuralSystem === "braced" && "Braced Frame: Diagonal po'lat va temir-beton fermalar lateral yuklarni uchburchaklar bo'yicha so'ndiradi."}
+            {structuralSystem === "tube" && "Tube System: Fasad bo'ylab zich joylashgan ustunlar binoni fazoviy quvur kabi mustahkamlaydi."}
+            {structuralSystem === "outrigger" && "Core-and-Outrigger: Markaziy yadro va tashqi ustunlar autriger fermalar bilan bog'lanib, eng yuqori qatlam barqarorligini beradi."}
+          </span>
         </div>
       </div>
 
-      {/* Pastki Nazorat & Status Bar */}
+      {/* PASTKI EKSPERTIZA XULOSA STATUSI */}
       <div className="relative z-20 px-4 py-3 bg-[#020617]/95 border-t border-cyan-500/20 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
@@ -384,8 +412,8 @@ export default function HolographicBIMViewer({
         </div>
 
         <div className="flex items-center gap-2 text-cyan-400">
-          <Compass size={14} />
-          <span>O'zR Qurilish Vazirligi Standartlari</span>
+          <ShieldCheck size={15} />
+          <span>O'zR Qurilish Vazirligi Me'yorlari (2026)</span>
         </div>
       </div>
     </div>
