@@ -8,6 +8,7 @@ import {
   Compass, Cpu, FileSpreadsheet
 } from "lucide-react";
 import HolographicBIMViewer from "./HolographicBIMViewer";
+import ThreeBIMSimulation from "./ThreeBIMSimulation";
 
 interface AuditResultItem {
   id: string;
@@ -256,19 +257,55 @@ export default function WorkspaceApp() {
   const failCount = results ? results.filter(r => r.status === "fail").length : 0;
   const passCount = results ? results.filter(r => r.status === "pass").length : 0;
 
+  const [viewMode, setViewMode] = useState<"3d_webgl" | "2d_blueprint">("3d_webgl");
+
   return (
     <div className="w-full max-w-5xl mx-auto px-3 sm:px-6 py-4 pb-20 space-y-6">
-      {/* 1. HOLOGRAPHIC 3D BIM STUDIO INTERACTIVE VIEWER */}
-      <HolographicBIMViewer
-        isScanning={isAuditing}
-        selectedCity={city}
-        rampSlope={rampSlope}
-        ceilingHeight={ceilingHeight}
-        fireRoadWidth={fireRoadWidth}
-        activeLayer={activeLayer}
-        setActiveLayer={setActiveLayer}
-        floorsCount={floors}
-      />
+      {/* 1. BIM VIZUAL REJIM TANLASH (3D WebGL vs 2D Blueprint) */}
+      <div className="flex items-center justify-between gap-3 px-1 flex-wrap">
+        <div className="flex items-center gap-1.5 p-1 bg-black/60 border border-white/10 rounded-2xl">
+          <button
+            onClick={() => setViewMode("3d_webgl")}
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-2 ${
+              viewMode === "3d_webgl"
+                ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>🏢 3D WebGL Simulyatsiya (Seysmik & Dinamika)</span>
+          </button>
+          <button
+            onClick={() => setViewMode("2d_blueprint")}
+            className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all flex items-center gap-2 ${
+              viewMode === "2d_blueprint"
+                ? "bg-cyan-500 text-black shadow-[0_0_20px_#06b6d4]"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <span>📐 2D Konstruktiv Tizimlar (BIM Blueprint)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 2. FAOL BIM STUDIYASI */}
+      {viewMode === "3d_webgl" ? (
+        <ThreeBIMSimulation
+          initialFloors={floors}
+          selectedCity={city}
+          isScanning={isAuditing}
+        />
+      ) : (
+        <HolographicBIMViewer
+          isScanning={isAuditing}
+          selectedCity={city}
+          rampSlope={rampSlope}
+          ceilingHeight={ceilingHeight}
+          fireRoadWidth={fireRoadWidth}
+          activeLayer={activeLayer}
+          setActiveLayer={setActiveLayer}
+          floorsCount={floors}
+        />
+      )}
 
       {/* 2. CHIZMA YUKLASH VA QMQ PARAMETRLARI */}
       {!results && !isAuditing && (
