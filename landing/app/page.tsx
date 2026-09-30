@@ -1,27 +1,11 @@
-import SpotlightCursor from "@/components/SpotlightCursor";
 import TelegramWebAppInit from "@/components/TelegramWebAppInit";
-import Hero from "@/components/Hero";
-import MiniAppInteractiveAudit from "@/components/MiniAppInteractiveAudit";
-import ProblemSection from "@/components/ProblemSection";
-import SolutionSection from "@/components/SolutionSection";
-import RulesTable from "@/components/RulesTable";
-import Pricing from "@/components/Pricing";
-import CTA from "@/components/CTA";
-import Footer from "@/components/Footer";
+import WorkspaceApp from "@/components/WorkspaceApp";
 
 export default function Home() {
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen bg-[#050B18]">
       <TelegramWebAppInit />
-      <SpotlightCursor />
-      <Hero />
-      <MiniAppInteractiveAudit />
-      <ProblemSection />
-      <SolutionSection />
-      <RulesTable />
-      <Pricing />
-      <CTA />
-      <Footer />
+      <WorkspaceApp />
     </main>
   );
 }
