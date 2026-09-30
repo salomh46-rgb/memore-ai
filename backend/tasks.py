@@ -27,6 +27,14 @@ try:
 except ImportError:
     QMQRulesEngine = None
 
+# Services import
+try:
+    from backend.services.vision_analyzer import GeminiVisionAnalyzer
+    from backend.services.pdf_generator import PDFReportGenerator
+except ImportError:
+    from services.vision_analyzer import GeminiVisionAnalyzer
+    from services.pdf_generator import PDFReportGenerator
+
 logger = logging.getLogger("memore_ai.tasks")
 settings = get_settings()
 
@@ -59,12 +67,28 @@ def execute_process_drawing(
 ) -> Dict[str, Any]:
     """
     Chizmani tekshirishning asosiy mantiqiy funksiyasi.
-    QMQRulesEngine orqali barcha qoidalarni tekshiradi va natijalarni saqlaydi.
+    1. Gemini Vision orqali chizmani multimodal skanerlash (agar parametrlar to'liq bo'lmasa)
+    2. QMQRulesEngine orqali barcha 50+ me'yorlarni tekshirish
+    3. QR-kodli va rasmiy muhrli PDF ekspertiza hisoboti generatsiya qilish
     """
     logger.info(f"Tekshiruv boshlandi [check_id={check_id}, file={file_path}]")
     completed_at = datetime.now(timezone.utc).isoformat()
 
     try:
+        import asyncio
+        data = dict(building_data or {})
+
+        # 1. GEMINI VISION MULTIMODAL EXTRACTION
+        try:
+            vision_analyzer = GeminiVisionAnalyzer(api_key=settings.GEMINI_API_KEY)
+            extracted_params = asyncio.run(vision_analyzer.analyze_drawing_file(file_path))
+            logger.info(f"Gemini Vision parametrlari ajratildi: {list(extracted_params.keys())}")
+            # Foydalanuvchi kiritgan ma'lumotlar ustun turadi, yetishmayotganlari chizmadan to'ldiriladi
+            data = {**extracted_params, **data}
+        except Exception as v_err:
+            logger.warning(f"Vision ekstraktorida ogohlantirish: {v_err}")
+
+        # 2. QMQRULESENGINE TEKSHIRUVI (50+ ta ShNQ / QMQ me'yorlari)
         engine = QMQRulesEngine() if QMQRulesEngine else None
         results_list = []
         summary_data = {
@@ -76,9 +100,8 @@ def execute_process_drawing(
             "ekspertiza_ready": False,
         }
 
-        if engine and building_data:
-            # QMQRulesEngine.run_all_checks orqali tekshirish
-            raw_results = engine.run_all_checks(building_data)
+        if engine:
+            raw_results = engine.run_all_checks(data)
             results_list = [
                 {
                     "rule_id": r.rule_id,
@@ -101,13 +124,34 @@ def execute_process_drawing(
                 for r in raw_results
             ]
             summary_data = engine.summary(raw_results)
-        elif not building_data:
-            logger.info("Bino parametrlari (building_data) kiritilmagan, dastlabki tekshiruv.")
+
+        # 3. RASMIY MUHRLI PDF HISOBOT GENERATSIYASI (QR-kodli)
+        pdf_path_str = None
+        pdf_url_str = None
+        try:
+            reports_dir = Path(settings.UPLOAD_DIR) / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            pdf_gen = PDFReportGenerator(output_dir=reports_dir)
+            pdf_file = pdf_gen.generate_report(
+                check_id=check_id,
+                project_name=data.get("project_title", f"Loyiha chizmasi: {Path(file_path).name}"),
+                city=data.get("city", "Toshkent"),
+                building_type=data.get("building_type", "residential"),
+                check_results=results_list,
+                summary=summary_data,
+            )
+            pdf_path_str = str(pdf_file)
+            pdf_url_str = f"/api/checks/{check_id}/pdf"
+            logger.info(f"✅ Rasmiy PDF Ekspertiza hisoboti yaratildi: {pdf_path_str}")
+        except Exception as pdf_err:
+            logger.error(f"PDF hisobot generatsiyasida xato: {pdf_err}")
 
         update_payload = {
             "status": "completed",
             "results": results_list,
             "summary": summary_data,
+            "pdf_report_path": pdf_path_str,
+            "pdf_report_url": pdf_url_str,
             "completed_at": completed_at,
             "error_message": None,
         }

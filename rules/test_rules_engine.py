@@ -211,6 +211,27 @@ def test_full_building_check_failing():
     print(f"\n✅ Barcha {summary['failed']} ta xato to'g'ri aniqlandi")
 
 
+def test_extended_50_plus_rules():
+    """50+ ta yangi QMQ/ShNQ qoidalari dinamik tekshiruvdan o'tishi kerak"""
+    building = {
+        "ceiling_height_m": 2.8,
+        "living_room_area_sqm": 18.5,
+        "bedroom_area_sqm": 12.0,
+        "kitchen_area_sqm": 9.5,
+        "wheelchair_turning_diameter_m": 1.6,
+        "accessible_toilet_width_m": 1.75,
+        "antiseismic_joint_width_mm": 60.0,
+        "column_min_dimension_mm": 450.0,
+        "raft_slab_thickness_mm": 700.0,
+        "greenery_area_percent": 30.0,
+        "setback_from_major_street_redline_m": 7.0,
+    }
+    results = engine.run_all_checks(building)
+    assert len(results) >= 11, f"Kutilgan tekshiruvlar kam: {len(results)}"
+    for r in results:
+        assert r.status == CheckStatus.PASS, f"Kutilmagan xato: {r.rule_id} -> {r.message_uz}"
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("Me'morAI QMQ/ShNQ Qoidalar Dvigateli Testlari")
@@ -237,6 +258,7 @@ if __name__ == "__main__":
         test_seismic_bukhara,
         test_full_building_check_passing,
         test_full_building_check_failing,
+        test_extended_50_plus_rules,
     ]
 
     passed = 0

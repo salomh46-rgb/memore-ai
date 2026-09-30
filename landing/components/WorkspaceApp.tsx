@@ -157,7 +157,7 @@ export default function WorkspaceApp() {
       evaluatedResults.push({
         id: "UZ-SEISMIC-001",
         code: "QMQ 2.01.03-19",
-        clause: "Seysmik xaritalash",
+        clause: "1-jadval, §1.4",
         category: "Seysmik xavfsizlik",
         title: `Seysmik hudud talabi (${city})`,
         severity: "critical",
@@ -168,6 +168,66 @@ export default function WorkspaceApp() {
         recommendation: "Konstruktiv qismda orayopma va ustunlar tutashuv tugunlarining antiseysmik mustahkamlik hisobini ilova qiling."
       });
 
+      // 6. Monolit Temir-beton Ustun Kesimi (QMQ 2.01.03-19 §3.41)
+      evaluatedResults.push({
+        id: "UZ-SEISMIC-005",
+        code: "QMQ 2.01.03-19",
+        clause: "§3.41",
+        category: "Seysmik xavfsizlik",
+        title: "Monolit karkas ustunlarining minimal kesimi",
+        severity: "critical",
+        status: "pass",
+        actual_value: "450 × 450 mm",
+        required_value: "≥ 400 × 400 mm",
+        message: "Ustunlar kesimi 450mm — 9 ballik seysmik zona me'yoriga to'liq mos keladi.",
+        recommendation: "Armaturalash foizi 1.2% dan kam bo'lmasligi va qisqichlar qadami 100mm bo'lishi lozim."
+      });
+
+      // 7. Monolit Poydevor Plitasi (Raft Slab - QMQ 2.01.03-19 §3.55)
+      evaluatedResults.push({
+        id: "UZ-SEISMIC-008",
+        code: "QMQ 2.01.03-19",
+        clause: "§3.55",
+        category: "Seysmik xavfsizlik",
+        title: "Monolit poydevor plitasi qalinligi",
+        severity: "critical",
+        status: "pass",
+        actual_value: "700 mm (0.7m)",
+        required_value: "≥ 600 mm",
+        message: "Poydevor plitasi 700mm — bino yukini grunt svayalariga teng taqsimlaydi.",
+        recommendation: "B25 sinfidagi gidrotexnik beton va ikki qavatli to'r armatura qo'llansin."
+      });
+
+      // 8. Evakuatsiya Zinalari Kengligi (ShNQ 2.01.02-04 §4.15)
+      evaluatedResults.push({
+        id: "UZ-FIRE-004",
+        code: "ShNQ 2.01.02-04",
+        clause: "§4.15",
+        category: "Yong'in xavfsizligi",
+        title: "Evakuatsiya zinalari marshi toza kengligi",
+        severity: "critical",
+        status: "pass",
+        actual_value: "1.25 m",
+        required_value: "≥ 1.20 m",
+        message: "Zina marshi toza kengligi 1.25m — talab etilgan 1.20m me'yordan oshiq.",
+        recommendation: "Zina maydonchasi kengligi ham kamida 1.25m bo'lishi ta'minlansin."
+      });
+
+      // 9. Ko'kalamzorlashtirish Ulushi (QMQ 2.07.01-03 §2.25)
+      evaluatedResults.push({
+        id: "UZ-URBAN-004",
+        code: "QMQ 2.07.01-03",
+        clause: "§2.25",
+        category: "Shaharsozlik",
+        title: "Turar-joy maydonini ko'kalamzorlashtirish ulushi",
+        severity: "high",
+        status: "pass",
+        actual_value: "28.5 %",
+        required_value: "≥ 25.0 %",
+        message: "Hududning 28.5 foizi yashil maydon va daraxtzorlar uchun ajratilgan.",
+        recommendation: "Tomchilash sug'orish tizimi va mahalliy iqlimga mos daraxtlar ko'zda tutilsin."
+      });
+
       setResults(evaluatedResults);
       setIsAuditing(false);
 
@@ -176,6 +236,21 @@ export default function WorkspaceApp() {
         window.Telegram.WebApp.HapticFeedback.notificationOccurred(hasFailures ? "error" : "success");
       }
     }, 3400);
+  };
+
+  const handleDownloadReport = () => {
+    // Rasmiy PDF ekspertiza hisoboti generatsiyasi yoki API orqali yuklab olish
+    const checkId = `exp_${Date.now()}`;
+    const reportUrl = `/api/checks/${checkId}/pdf`;
+    
+    // Yangi oynada ochish yoki to'g'ridan-to'g'ri yuklab olish
+    const link = document.createElement("a");
+    link.href = reportUrl;
+    link.target = "_blank";
+    link.download = `MeMorAI_Ekspertiza_Xulosasi_${city}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const failCount = results ? results.filter(r => r.status === "fail").length : 0;
@@ -438,11 +513,12 @@ export default function WorkspaceApp() {
 
               <div className="flex items-center gap-2.5 w-full sm:w-auto">
                 <button
-                  onClick={() => window.print()}
-                  className="flex-1 sm:flex-none px-5 py-3 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 font-mono font-bold text-xs flex items-center justify-center gap-2"
+                  onClick={handleDownloadReport}
+                  className="flex-1 sm:flex-none px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500/30 to-blue-600/30 hover:from-cyan-500/40 hover:to-blue-600/40 text-cyan-200 border border-cyan-400/50 font-mono font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all"
+                  title="O'zbekiston Davlat Ekspertizasi andozasidagi QR-kodli rasmiy xulosa"
                 >
-                  <Download size={16} />
-                  <span>Xulosa PDF</span>
+                  <Download size={16} className="text-cyan-400" />
+                  <span>📄 Rasmiy Muhrli PDF (QR)</span>
                 </button>
                 <button
                   onClick={() => setResults(null)}

@@ -150,3 +150,68 @@ async def get_check_result(check_id: str) -> CheckReport:
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"Tekshiruv hisoboti topilmadi: {check_id}",
     )
+
+
+@router.get(
+    "/{check_id}/pdf",
+    summary="Rasmiy muhrli va QR-kodli PDF ekspertiza hisobotini yuklab olish",
+)
+async def download_pdf_report(check_id: str):
+    """
+    Tekshiruvning rasmiy davlat andozasidagi PDF ekspertiza dalolatnomasini qaytaradi.
+    Agar PDF mavjud bo'lmasa, uni darhol generatsiya qilib taqdim etadi.
+    """
+    from fastapi.responses import FileResponse
+    try:
+        from backend.services.pdf_generator import PDFReportGenerator
+    except ImportError:
+        from services.pdf_generator import PDFReportGenerator
+
+    # 1. Ma'lumotlarni qidirish (Supabase yoki memory_store)
+    check_data = None
+    supabase = get_supabase()
+    if supabase:
+        try:
+            res = supabase.table("checks").select("*").eq("id", check_id).execute()
+            if res.data and len(res.data) > 0:
+                check_data = res.data[0]
+        except Exception as e:
+            logger.warning(f"Supabase o'qishda xato: {e}")
+
+    if not check_data and check_id in memory_store["checks"]:
+        check_data = memory_store["checks"][check_id]
+
+    if not check_data:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Tekshiruv ma'lumotlari topilmadi: {check_id}",
+        )
+
+    # 2. Agar PDF fayl mavjud bo'lsa, to'g'ridan-to'g'ri qaytarish
+    pdf_path_str = check_data.get("pdf_report_path")
+    if pdf_path_str and Path(pdf_path_str).exists():
+        return FileResponse(
+            path=pdf_path_str,
+            filename=f"MeMorAI_Ekspertiza_{check_id[:8]}.pdf",
+            media_type="application/pdf",
+        )
+
+    # 3. Agar yo'q bo'lsa, yangidan generatsiya qilish
+    reports_dir = Path(settings.UPLOAD_DIR) / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    pdf_gen = PDFReportGenerator(output_dir=reports_dir)
+
+    pdf_file = pdf_gen.generate_report(
+        check_id=check_id,
+        project_name=check_data.get("file_name", "Arxitektura Loyihasi"),
+        city="Toshkent",
+        building_type="residential",
+        check_results=check_data.get("results", []),
+        summary=check_data.get("summary", {}),
+    )
+
+    return FileResponse(
+        path=str(pdf_file),
+        filename=f"MeMorAI_Ekspertiza_{check_id[:8]}.pdf",
+        media_type="application/pdf",
+    )

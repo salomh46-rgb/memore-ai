@@ -49,11 +49,39 @@ class CheckResult:
     notes: str = ""
 
 
+def _safe_format(template: str, **kwargs) -> str:
+    """Xavfsiz matn formatlovchi: yetishmayotgan parametrlar tufayli KeyError bermaydi."""
+    actual = kwargs.get("actual", kwargs.get("actual_spots", ""))
+    required = kwargs.get("required", kwargs.get("min_val", ""))
+    ctx = {
+        "actual": actual,
+        "required": required,
+        "actual_spots": kwargs.get("actual_spots", actual),
+        "total_apartments": kwargs.get("total_apartments", ""),
+        "ratio": f"{kwargs.get('ratio', 0):.2f}" if isinstance(kwargs.get("ratio"), (int, float)) else str(kwargs.get("ratio", "")),
+        **kwargs
+    }
+    try:
+        return template.format(**ctx)
+    except Exception:
+        return template
+
+
 class QMQRulesEngine:
     """
     O'zbekiston QMQ/ShNQ qoidalari asosida deterministic tekshiruv dvigateli.
     Har bir tekshiruv uchun aniq modda havolasi va isbot mavjud.
     """
+
+    ID_ALIASES = {
+        "UZ-ACCESS-001": "UZ-ACC-001",
+        "UZ-ACCESS-002": "UZ-ACC-002",
+        "UZ-ACCESSIBILITY-001": "UZ-ACC-001",
+        "UZ-ACCESSIBILITY-002": "UZ-ACC-002",
+        "UZ-PARKING-001": "UZ-URBAN-005",
+        "UZ-CEILING-001": "UZ-RES-001",
+        "UZ-FIRE-EVAC-001": "UZ-FIRE-010",
+    }
 
     def __init__(self, rules_path: Path | str | None = None):
         if rules_path is None:
@@ -61,6 +89,12 @@ class QMQRulesEngine:
         with open(rules_path, encoding="utf-8") as f:
             data = json.load(f)
         self.rules: dict[str, dict] = {r["id"]: r for r in data["rules"]}
+        # Aliaslarni ham self.rules ga qo'shamiz (backward compatibility)
+        for legacy_id, target_id in self.ID_ALIASES.items():
+            if target_id in self.rules and legacy_id not in self.rules:
+                alias_rule = dict(self.rules[target_id])
+                alias_rule["id"] = legacy_id
+                self.rules[legacy_id] = alias_rule
         self.meta = data["_meta"]
 
     # ─────────────────────────────────────────
@@ -291,15 +325,21 @@ class QMQRulesEngine:
             title_ru=rule["title_ru"],
             actual_value=round(ratio, 3),
             required_value=min_val,
-            message_uz=rule["error_template_uz"].format(
+            message_uz=_safe_format(
+                rule["error_template_uz"],
                 actual_spots=total_parking_spots,
                 total_apartments=total_apartments,
                 ratio=ratio,
+                actual=round(ratio, 2),
+                required=min_val,
             ) if not passed else f"✅ Avtoturargoh: {total_parking_spots}/{total_apartments} xonadon = {ratio:.2f}",
-            message_ru=rule["error_template_ru"].format(
+            message_ru=_safe_format(
+                rule["error_template_ru"],
                 actual_spots=total_parking_spots,
                 total_apartments=total_apartments,
                 ratio=ratio,
+                actual=round(ratio, 2),
+                required=min_val,
             ) if not passed else f"✅ Паркомест: {total_parking_spots}/{total_apartments} квартир = {ratio:.2f}",
             confidence=confidence,
             source_page=source_page,
@@ -332,11 +372,15 @@ class QMQRulesEngine:
             title_ru=rule["title_ru"],
             actual_value=actual_height_m,
             required_value=min_val,
-            message_uz=rule["error_template_uz"].format(
-                actual=actual_height_m
+            message_uz=_safe_format(
+                rule["error_template_uz"],
+                actual=actual_height_m,
+                required=min_val,
             ) if not passed else f"✅ Shift balandligi: {actual_height_m}m ≥ {min_val}m",
-            message_ru=rule["error_template_ru"].format(
-                actual=actual_height_m
+            message_ru=_safe_format(
+                rule["error_template_ru"],
+                actual=actual_height_m,
+                required=min_val,
             ) if not passed else f"✅ Высота потолка: {actual_height_m}м ≥ {min_val}м",
             confidence=confidence,
             source_page=source_page,
@@ -426,6 +470,53 @@ class QMQRulesEngine:
                 building_data["evacuation_door_width_m"],
                 building_type=building_data.get("building_type_evac", "public_corridor"),
             ))
+
+        # Dinamik qoidalar (50+ ta me'yor avtomatik baholanadi)
+        checked_rules = {r.rule_id for r in results}
+        for rule_id, rule in self.rules.items():
+            if rule_id in checked_rules:
+                continue
+            metric = rule.get("metric")
+            if not metric or metric not in building_data:
+                continue
+            
+            actual_val = building_data[metric]
+            check_type = rule.get("check_type", "min_value")
+            passed = True
+            req_val = rule.get("min_value")
+
+            if check_type == "min_value":
+                min_v = rule.get("min_value", 0.0)
+                req_val = min_v
+                passed = float(actual_val) >= float(min_v)
+            elif check_type == "max_value":
+                max_v = rule.get("max_value", 0.0)
+                req_val = max_v
+                passed = float(actual_val) <= float(max_v)
+            elif check_type == "range":
+                min_v = rule.get("min_value", 0.0)
+                max_v = rule.get("max_value", float("inf"))
+                req_val = f"{min_v} - {max_v}"
+                passed = float(min_v) <= float(actual_val) <= float(max_v)
+
+            msg_uz = _safe_format(rule.get("error_template_uz", ""), actual=actual_val, required=req_val) if not passed else f"✅ {rule.get('title_uz')}: {actual_val} {rule.get('unit', '')}"
+            msg_ru = _safe_format(rule.get("error_template_ru", ""), actual=actual_val, required=req_val) if not passed else f"✅ {rule.get('title_ru')}: {actual_val} {rule.get('unit', '')}"
+
+            results.append(CheckResult(
+                rule_id=rule_id,
+                code=rule.get("code", "ShNQ"),
+                clause=rule.get("clause", ""),
+                category=rule.get("category", "umumiy"),
+                severity=Severity(rule.get("severity", "high")),
+                status=CheckStatus.PASS if passed else CheckStatus.FAIL,
+                title_uz=rule.get("title_uz", ""),
+                title_ru=rule.get("title_ru", ""),
+                actual_value=actual_val,
+                required_value=req_val,
+                message_uz=msg_uz,
+                message_ru=msg_ru,
+            ))
+            checked_rules.add(rule_id)
 
         return results
 
