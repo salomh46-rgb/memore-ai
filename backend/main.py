@@ -12,16 +12,19 @@ from fastapi import FastAPI, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-# Loyiha ildiz katalogini sys.path ga kiritish
-project_root = Path(__file__).resolve().parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+# Loyiha ildiz katalogini va backend papkasini sys.path ga kiritish
+backend_dir = Path(__file__).resolve().parent
+project_root = backend_dir.parent
+
+for p in [str(project_root), str(backend_dir)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 try:
     from backend.config import get_settings
     from backend.database import get_supabase
     from backend.routers import checks_router, projects_router
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     from config import get_settings
     from database import get_supabase
     from routers import checks_router, projects_router
