@@ -192,6 +192,7 @@ export default function WorkspaceApp() {
         fireRoadWidth={fireRoadWidth}
         activeLayer={activeLayer}
         setActiveLayer={setActiveLayer}
+        floorsCount={floors}
       />
 
       {/* 2. CHIZMA YUKLASH VA QMQ PARAMETRLARI */}
@@ -256,7 +257,7 @@ export default function WorkspaceApp() {
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-mono text-slate-300 mb-1.5">
                   Bino vazifasi va turi:
@@ -290,6 +291,23 @@ export default function WorkspaceApp() {
                   <option value="Farg'ona">Farg'ona (8 ball)</option>
                   <option value="Qarshi">Qarshi (7 ball)</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5">
+                  BIM Qavatlar soni: <strong className="text-cyan-300">{floors} qavat</strong>
+                </label>
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="range"
+                    min="3"
+                    max="10"
+                    value={floors}
+                    onChange={(e) => setFloors(parseInt(e.target.value) || 6)}
+                    className="w-full accent-cyan-400 cursor-pointer"
+                  />
+                  <span className="text-xs font-mono text-cyan-300 w-8 text-right">{floors}Q</span>
+                </div>
               </div>
             </div>
 

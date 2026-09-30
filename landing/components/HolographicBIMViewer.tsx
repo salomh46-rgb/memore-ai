@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, MouseEvent, TouchEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Layers, Eye, EyeOff, Activity, ShieldAlert, ShieldCheck, 
-  Flame, Accessibility, Building, Compass, Sparkles
+  Layers, RotateCw, ZoomIn, ZoomOut, Scissors, SplitSquareVertical,
+  Building, Compass, Flame, Accessibility, Activity, Maximize2, RefreshCw
 } from "lucide-react";
 
 interface BIMViewerProps {
@@ -15,6 +15,7 @@ interface BIMViewerProps {
   fireRoadWidth: number;
   activeLayer: string;
   setActiveLayer: (layer: string) => void;
+  floorsCount?: number;
 }
 
 export default function HolographicBIMViewer({
@@ -25,252 +26,341 @@ export default function HolographicBIMViewer({
   fireRoadWidth,
   activeLayer,
   setActiveLayer,
+  floorsCount = 6,
 }: BIMViewerProps) {
+  // 1. 360° Interaktiv 3D Orbit Holati
+  const [rotX, setRotX] = useState<number>(24);
+  const [rotY, setRotY] = useState<number>(-32);
+  const [zoom, setZoom] = useState<number>(1);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const lastMousePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // 2. Kinematik Rejimlar: Exploded View & Section Cut A-A
+  const [isExploded, setIsExploded] = useState<boolean>(false);
+  const [isSectionCut, setIsSectionCut] = useState<boolean>(false);
+  const [sectionOffset, setSectionOffset] = useState<number>(50); // Kesim joylashuvi (%)
+
   const isRampError = rampSlope > 8.33;
   const isCeilingError = ceilingHeight < 2.70;
   const isFireError = fireRoadWidth < 6.0;
 
-  return (
-    <div className="relative w-full rounded-3xl bg-[#030712] border border-cyan-500/20 overflow-hidden shadow-[0_0_50px_rgba(6,182,212,0.12)]">
-      {/* 2026 Aylanuvchi Neon Border-Beam */}
-      <div className="absolute inset-0 pointer-events-none rounded-3xl overflow-hidden">
-        <div className="absolute -inset-[100%] animate-[spin_8s_linear_infinite] bg-[conic-gradient(from_0deg,transparent_0_340deg,#06b6d4_360deg)] opacity-40 blur-sm" />
-        <div className="absolute inset-[1px] rounded-3xl bg-[#030712]/95" />
-      </div>
+  // Qavatlar balandligining parametrik hisobi
+  const floorHeightPx = Math.max(28, Math.min(52, ceilingHeight * 14));
+  const visibleFloors = Math.min(10, Math.max(3, floorsCount));
 
-      {/* Arxitektura Millimetrovka Grid Foni */}
+  // Sichqoncha va sensorli aylantirish hodisalari (360° Orbit)
+  const handleMouseDown = (e: MouseEvent) => {
+    setIsDragging(true);
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    const deltaX = e.clientX - lastMousePos.current.x;
+    const deltaY = e.clientY - lastMousePos.current.y;
+    setRotY((prev) => (prev + deltaX * 0.6) % 360);
+    setRotX((prev) => Math.max(-10, Math.min(75, prev - deltaY * 0.5)));
+    lastMousePos.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handleMouseUp = () => setIsDragging(false);
+
+  // Sensorli ekranlar (Smartfon / Telegram WebApp Touch)
+  const handleTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true);
+      lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+  };
+
+  const handleTouchMove = (e: TouchEvent) => {
+    if (!isDragging || e.touches.length !== 1) return;
+    const deltaX = e.touches[0].clientX - lastMousePos.current.x;
+    const deltaY = e.touches[0].clientY - lastMousePos.current.y;
+    setRotY((prev) => (prev + deltaX * 0.7) % 360);
+    setRotX((prev) => Math.max(-10, Math.min(75, prev - deltaY * 0.6)));
+    lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+
+  const handleTouchEnd = () => setIsDragging(false);
+
+  // Avtomatik qayta tiklash
+  const resetCamera = () => {
+    setRotX(24);
+    setRotY(-32);
+    setZoom(1);
+    setIsExploded(false);
+    setIsSectionCut(false);
+  };
+
+  return (
+    <div className="relative w-full rounded-3xl bg-[#020617] border border-cyan-500/25 overflow-hidden shadow-[0_0_60px_rgba(6,182,212,0.15)] select-none">
+      {/* 2026 Arxitektura Millimetrovka Grid Foni */}
       <div 
-        className="absolute inset-0 pointer-events-none opacity-25"
+        className="absolute inset-0 pointer-events-none opacity-20"
         style={{
           backgroundImage: `
-            linear-gradient(to right, rgba(6,182,212,0.15) 1px, transparent 1px),
-            linear-gradient(to bottom, rgba(6,182,212,0.15) 1px, transparent 1px),
-            radial-gradient(circle at 50% 50%, rgba(6,182,212,0.08) 0%, transparent 70%)
+            linear-gradient(to right, rgba(6,182,212,0.2) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(6,182,212,0.2) 1px, transparent 1px)
           `,
-          backgroundSize: "24px 24px, 24px 24px, 100% 100%"
+          backgroundSize: "28px 28px"
         }}
       />
 
-      {/* Sarlavha & Metrikalar Paneli */}
-      <div className="relative z-10 p-4 sm:p-5 flex items-center justify-between border-b border-cyan-500/15 backdrop-blur-md">
+      {/* Yuqori Boshqaruv & Arxitektura Rejimlari Paneli */}
+      <div className="relative z-20 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 border-b border-cyan-500/20 bg-black/50 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <div className="relative flex items-center justify-center w-9 h-9 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-            <Layers size={18} className="animate-pulse" />
-            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+          <div className="flex items-center justify-center w-10 h-10 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+            <Building size={20} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white tracking-wider uppercase font-mono">
-                BIM Holographic 3D Layer Studio
+              <h3 className="text-sm font-bold text-white tracking-wider font-mono">
+                BIM 3D Kinematic Studio
               </h3>
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono border border-cyan-500/30">
-                v2026.4
+                LOD 400
               </span>
             </div>
-            <p className="text-[11px] text-cyan-400/70 font-mono">
-              Koordinatalar: 41.2995° N, 69.2401° E ({selectedCity}) • LOD 400
+            <p className="text-[11px] text-cyan-400/80 font-mono">
+              Orbit: {Math.round(rotY)}° Yaw, {Math.round(rotX)}° Pitch • {visibleFloors} Qavat ({selectedCity})
             </p>
           </div>
         </div>
 
-        {/* Qatlam Filtr Tugmalari */}
-        <div className="hidden sm:flex items-center gap-1.5 bg-black/40 border border-cyan-500/20 rounded-xl p-1">
-          {[
-            { id: "all", label: "Barcha Qatlamlar", icon: Building },
-            { id: "accessibility", label: "Pandus (ShNQ 2.07)", icon: Accessibility },
-            { id: "fire", label: "Yong'in (ShNQ 2.01)", icon: Flame },
-            { id: "structure", label: "Karkas (QMQ 2.01)", icon: Activity },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeLayer === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveLayer(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all ${
-                  isActive
-                    ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_12px_rgba(6,182,212,0.3)]"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
-              >
-                <Icon size={13} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        {/* 4 TA KINEMATIK REJIM TUGMALARI */}
+        <div className="flex items-center flex-wrap gap-2">
+          {/* Exploded View Tugmasi */}
+          <button
+            onClick={() => setIsExploded(!isExploded)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
+              isExploded 
+                ? "bg-amber-500/20 border-amber-500 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.4)]" 
+                : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-cyan-500/40"
+            }`}
+            title="Qavatlarni havoda ajratib ko'rsatish"
+          >
+            <SplitSquareVertical size={14} className={isExploded ? "animate-bounce" : ""} />
+            <span>Exploded BIM</span>
+          </button>
+
+          {/* Section Cut A-A Tugmasi */}
+          <button
+            onClick={() => setIsSectionCut(!isSectionCut)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
+              isSectionCut 
+                ? "bg-rose-500/20 border-rose-500 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.4)]" 
+                : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:border-cyan-500/40"
+            }`}
+            title="Lazerli arxitektura kesimi"
+          >
+            <Scissors size={14} className={isSectionCut ? "rotate-90" : ""} />
+            <span>Kesim A-A</span>
+          </button>
+
+          {/* Zoom & Reset */}
+          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl p-0.5">
+            <button
+              onClick={() => setZoom((z) => Math.min(1.5, z + 0.15))}
+              className="p-1.5 text-slate-300 hover:text-cyan-300 rounded-lg"
+              title="Kattalashtirish"
+            >
+              <ZoomIn size={14} />
+            </button>
+            <button
+              onClick={() => setZoom((z) => Math.max(0.65, z - 0.15))}
+              className="p-1.5 text-slate-300 hover:text-cyan-300 rounded-lg"
+              title="Kichraytirish"
+            >
+              <ZoomOut size={14} />
+            </button>
+            <button
+              onClick={resetCamera}
+              className="p-1.5 text-slate-300 hover:text-amber-400 rounded-lg"
+              title="Kamerani boshlang'ich holatga qaytarish"
+            >
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* 3D Izometrik BIM Stage */}
-      <div className="relative z-10 h-72 sm:h-96 w-full flex items-center justify-center p-4 overflow-hidden select-none">
+      {/* 3D INTERAKTIV SAHNA (3D Perspective Viewport) */}
+      <div 
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="relative z-10 h-80 sm:h-[420px] w-full flex items-center justify-center cursor-grab active:cursor-grabbing overflow-hidden"
+        style={{ perspective: "1100px" }}
+      >
         {/* Lazerli Skanerlash Chizig'i (Scan Beam) */}
         {isScanning && (
           <motion.div
             initial={{ top: "-10%" }}
             animate={{ top: "110%" }}
-            transition={{ duration: 2.2, repeat: Infinity, ease: "linear" }}
-            className="absolute left-0 right-0 h-1.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent z-30 pointer-events-none shadow-[0_0_25px_#22d3ee]"
+            transition={{ duration: 2.4, repeat: Infinity, ease: "linear" }}
+            className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent z-40 pointer-events-none shadow-[0_0_30px_#22d3ee]"
           >
-            <div className="w-full h-24 bg-gradient-to-b from-cyan-500/20 to-transparent -translate-y-full" />
+            <div className="w-full h-32 bg-gradient-to-b from-cyan-400/25 to-transparent -translate-y-full" />
           </motion.div>
         )}
 
-        {/* 3D BINO MODELI (Isometric SVG + Layers) */}
-        <div className="relative w-72 sm:w-96 h-64 sm:h-80 flex items-center justify-center">
-          <svg
-            viewBox="0 0 500 400"
-            className="w-full h-full drop-shadow-[0_15px_30px_rgba(0,0,0,0.8)]"
+        {/* Kesim Lazer Tekisligi (Section Cut Plane) */}
+        {isSectionCut && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="absolute inset-y-0 w-1 bg-rose-500/70 z-30 pointer-events-none shadow-[0_0_30px_#f43f5e]"
+            style={{ left: `${sectionOffset}%` }}
           >
-            <defs>
-              {/* Neon Glow Filters */}
-              <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-              <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="6" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
-              </filter>
-              <linearGradient id="grid-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#0891b2" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.05" />
-              </linearGradient>
-            </defs>
+            <div className="absolute top-4 left-2 px-2 py-0.5 rounded bg-rose-950/80 border border-rose-500 text-rose-300 text-[10px] font-mono whitespace-nowrap">
+              Kesim A-A (X={sectionOffset}m)
+            </div>
+          </motion.div>
+        )}
 
-            {/* 1. ASOSIY ZAMIN VA KADASTR MAYDONI (Isometric Ground Plane) */}
-            <g opacity="0.8">
-              <polygon
-                points="250,380 470,270 250,160 30,270"
-                fill="url(#grid-grad)"
-                stroke="#0891b2"
-                strokeWidth="1.5"
-                strokeDasharray="4 4"
-              />
-              {/* O'qlar */}
-              <line x1="250" y1="380" x2="490" y2="260" stroke="#06b6d4" strokeWidth="1" strokeOpacity="0.6" />
-              <line x1="250" y1="380" x2="10" y2="260" stroke="#06b6d4" strokeWidth="1" strokeOpacity="0.6" />
-              <text x="475" y="255" fill="#22d3ee" fontSize="10" fontFamily="monospace">X-AXIS (48.0m)</text>
-              <text x="5" y="255" fill="#22d3ee" fontSize="10" fontFamily="monospace">Y-AXIS (36.0m)</text>
-            </g>
+        {/* 3D BINO MODELI (CSS 3D Transforms) */}
+        <motion.div
+          animate={{
+            rotateX: rotX,
+            rotateY: rotY,
+            scale: zoom,
+          }}
+          transition={{ type: "spring", stiffness: 220, damping: 25 }}
+          style={{ transformStyle: "preserve-3d" }}
+          className="relative w-56 sm:w-64 h-56 sm:h-64 flex items-center justify-center"
+        >
+          {/* 1. ZAMIN VA KADASTR TEKISLIGI (Ground Grid Plane) */}
+          <div 
+            style={{
+              transform: `rotateX(90deg) translateZ(-80px)`,
+              transformStyle: "preserve-3d",
+            }}
+            className="absolute w-80 sm:w-96 h-80 sm:h-96 rounded-3xl border border-cyan-500/30 bg-cyan-950/20 shadow-[0_0_50px_rgba(6,182,212,0.15)] flex items-center justify-center"
+          >
+            {/* Koordinata markazi */}
+            <div className="w-full h-[1px] bg-cyan-500/40 absolute" />
+            <div className="h-full w-[1px] bg-cyan-500/40 absolute" />
+            <span className="absolute bottom-2 right-4 text-[10px] font-mono text-cyan-400">
+              KADASTR: {selectedCity} (48m × 36m)
+            </span>
 
-            {/* 2. YONG'IN YO'LI QATLAMI (Fire Access Road Perimeter) */}
-            {(activeLayer === "all" || activeLayer === "fire") && (
-              <g>
-                <polygon
-                  points="250,365 440,270 250,175 60,270"
-                  fill="none"
-                  stroke={isFireError ? "#f43f5e" : "#10b981"}
-                  strokeWidth={isFireError ? "3" : "2"}
-                  strokeDasharray={isFireError ? "6 3" : "none"}
-                  filter={isFireError ? "url(#glow-red)" : "url(#glow-cyan)"}
-                />
-                {/* Yong'in Yo'li Eni Label */}
-                <circle cx="155" cy="318" r="4" fill={isFireError ? "#f43f5e" : "#10b981"} />
-                <line x1="155" y1="318" x2="100" y2="345" stroke={isFireError ? "#f43f5e" : "#10b981"} strokeWidth="1" />
-                <rect x="50" y="340" width="105" height="22" rx="4" fill="#030712" stroke={isFireError ? "#f43f5e" : "#10b981"} strokeWidth="1" />
-                <text x="56" y="355" fill={isFireError ? "#fda4af" : "#6ee7b7"} fontSize="10" fontFamily="monospace" fontWeight="bold">
-                  Yong'in: {fireRoadWidth}m {isFireError ? "(≤6m XATO)" : "(≥6m OK)"}
-                </text>
-              </g>
-            )}
+            {/* Yong'in Yo'li Perimetri */}
+            <div 
+              className={`absolute inset-4 rounded-2xl border-2 transition-colors ${
+                isFireError 
+                  ? "border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.4)] border-dashed animate-pulse" 
+                  : "border-emerald-500/60 shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+              }`}
+            >
+              <span className={`absolute -top-3 left-4 px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+                isFireError ? "bg-rose-950 border border-rose-500 text-rose-300" : "bg-emerald-950 border border-emerald-500 text-emerald-300"
+              }`}>
+                Yong'in yo'li: {fireRoadWidth}m {isFireError ? "(QOIDABUZARLIK)" : "(OK)"}
+              </span>
+            </div>
 
-            {/* 3. BINO IZOMETRIK KARKASI (Isometric 3-Tier Multi-Story Structure) */}
-            <g>
-              {/* Qavat 1 (L1) */}
-              <g opacity={activeLayer === "all" || activeLayer === "accessibility" ? 1 : 0.35}>
-                {/* Chap tomon devor */}
-                <polygon points="120,290 250,355 250,290 120,225" fill="#0f172a" stroke="#0ea5e9" strokeWidth="1.5" />
-                {/* O'ng tomon devor */}
-                <polygon points="250,355 380,290 380,225 250,290" fill="#1e293b" stroke="#0ea5e9" strokeWidth="1.5" />
-                {/* L1 Orayopma plitasi */}
-                <polygon points="250,290 380,225 250,160 120,225" fill="#0891b2" fillOpacity="0.15" stroke="#38bdf8" strokeWidth="2" />
-              </g>
-
-              {/* Qavat 2 (L2) */}
-              <g opacity={activeLayer === "all" || activeLayer === "structure" ? 1 : 0.35}>
-                <polygon points="120,225 250,290 250,225 120,160" fill="#0f172a" stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="2 2" />
-                <polygon points="250,290 380,225 380,160 250,225" fill="#1e293b" stroke="#0ea5e9" strokeWidth="1.5" strokeDasharray="2 2" />
-                <polygon points="250,225 380,160 250,95 120,160" fill="#0891b2" fillOpacity="0.2" stroke="#38bdf8" strokeWidth="2" />
-              </g>
-
-              {/* Qavat 3 / Tom (Roof & Sky Level) */}
-              <g opacity={activeLayer === "all" || activeLayer === "structure" ? 1 : 0.35}>
-                <polygon points="120,160 250,225 250,160 120,95" fill="#0f172a" stroke="#0ea5e9" strokeWidth="1.5" />
-                <polygon points="250,225 380,160 380,95 250,160" fill="#1e293b" stroke="#0ea5e9" strokeWidth="1.5" />
-                <polygon points="250,160 380,95 250,30 120,95" fill="#06b6d4" fillOpacity="0.25" stroke="#22d3ee" strokeWidth="2" filter="url(#glow-cyan)" />
-              </g>
-
-              {/* Ustunlar (BIM Structural Columns) */}
-              <line x1="250" y1="355" x2="250" y2="30" stroke="#22d3ee" strokeWidth="2" strokeDasharray="3 3" opacity="0.7" />
-              <line x1="120" y1="290" x2="120" y2="95" stroke="#0ea5e9" strokeWidth="1.5" opacity="0.5" />
-              <line x1="380" y1="290" x2="380" y2="95" stroke="#0ea5e9" strokeWidth="1.5" opacity="0.5" />
-            </g>
-
-            {/* 4. SHIFT BALANDLIGI LAZER KO'RSATGICHI (Ceiling Dimension Ray) */}
-            {(activeLayer === "all" || activeLayer === "structure") && (
-              <g>
-                <line x1="255" y1="350" x2="255" y2="295" stroke={isCeilingError ? "#f43f5e" : "#22d3ee"} strokeWidth="2" />
-                <circle cx="255" cy="350" r="3" fill={isCeilingError ? "#f43f5e" : "#22d3ee"} />
-                <circle cx="255" cy="295" r="3" fill={isCeilingError ? "#f43f5e" : "#22d3ee"} />
-                <line x1="255" y1="322" x2="330" y2="330" stroke={isCeilingError ? "#f43f5e" : "#22d3ee"} strokeWidth="1" />
-                <rect x="330" y="320" width="100" height="22" rx="4" fill="#030712" stroke={isCeilingError ? "#f43f5e" : "#22d3ee"} strokeWidth="1" />
-                <text x="336" y="335" fill={isCeilingError ? "#fda4af" : "#a5f3fc"} fontSize="10" fontFamily="monospace" fontWeight="bold">
-                  H={ceilingHeight}m {isCeilingError ? "(≤2.7m XATO)" : "(≥2.7m OK)"}
-                </text>
-              </g>
-            )}
-
-            {/* 5. INKLUZIV PANDUS QATLAMI (Ramp Geometry & Slope Indicator) */}
-            {(activeLayer === "all" || activeLayer === "accessibility") && (
-              <g>
-                {/* Pandus platformasi */}
-                <polygon
-                  points="210,340 240,355 200,375 170,360"
-                  fill={isRampError ? "#ef4444" : "#10b981"}
-                  fillOpacity="0.4"
-                  stroke={isRampError ? "#f43f5e" : "#10b981"}
-                  strokeWidth="2"
-                  filter={isRampError ? "url(#glow-red)" : "url(#glow-cyan)"}
-                />
-                {/* Pandus qiyaligi Callout */}
-                <circle cx="185" cy="368" r="4" fill={isRampError ? "#f43f5e" : "#10b981"} />
-                <line x1="185" y1="368" x2="140" y2="400" stroke={isRampError ? "#f43f5e" : "#10b981"} strokeWidth="1" />
-                <rect x="80" y="380" width="130" height="22" rx="4" fill="#030712" stroke={isRampError ? "#f43f5e" : "#10b981"} strokeWidth="1" />
-                <text x="86" y="395" fill={isRampError ? "#fda4af" : "#6ee7b7"} fontSize="10" fontFamily="monospace" fontWeight="bold">
-                  Pandus: {rampSlope}% {isRampError ? "(Tik! §17)" : "(≤8.33% OK)"}
-                </text>
-              </g>
-            )}
-
-            {/* 6. SEYSMIKA CHOKI VA BELBOG'I (Seismic Ring & Joints) */}
-            <g opacity="0.6">
-              <polygon
-                points="250,225 380,160 250,95 120,160"
-                fill="none"
-                stroke="#a855f7"
-                strokeWidth="2"
-                strokeDasharray="5 3"
-              />
-              <text x="210" y="100" fill="#d8b4fe" fontSize="9" fontFamily="monospace">
-                Antiseysmik belbog' ({selectedCity} - 9 ball)
-              </text>
-            </g>
-          </svg>
-
-          {/* Hologram Markazi Koordinata Viziri */}
-          <div className="absolute top-3 left-3 text-[10px] font-mono text-cyan-400/80 bg-black/60 border border-cyan-500/20 px-2 py-1 rounded backdrop-blur">
-            <div>CAM: ISO-30° | ORTHO</div>
-            <div>FPS: 60 | COMPLIANCE: REAL-TIME</div>
+            {/* Inkluziv Pandus Zonasi */}
+            <div 
+              className={`absolute -bottom-6 left-12 w-28 h-10 rounded-lg border-2 transition-all ${
+                isRampError 
+                  ? "border-rose-500 bg-rose-950/60 shadow-[0_0_20px_rgba(244,63,94,0.5)]" 
+                  : "border-cyan-400 bg-cyan-950/60 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+              }`}
+            >
+              <span className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white">
+                Pandus {rampSlope}%
+              </span>
+            </div>
           </div>
+
+          {/* 2. PARAMETRIK QAVATLAR (Exploded View & Morphing) */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ transformStyle: "preserve-3d" }}>
+            {Array.from({ length: visibleFloors }).map((_, idx) => {
+              const floorNum = idx + 1;
+              const isTopFloor = floorNum === visibleFloors;
+
+              // Exploded view da har bir qavat orasidagi vertikal masofa
+              const explodedGap = isExploded ? idx * 45 : 0;
+              const zLevel = -60 + (idx * floorHeightPx) + explodedGap;
+
+              return (
+                <motion.div
+                  key={floorNum}
+                  initial={false}
+                  animate={{
+                    transform: `translateZ(${zLevel}px)`,
+                  }}
+                  transition={{ type: "spring", stiffness: 180, damping: 22 }}
+                  style={{ transformStyle: "preserve-3d" }}
+                  className={`absolute w-44 sm:w-52 h-44 sm:h-52 rounded-2xl border-2 transition-all duration-300 ${
+                    isTopFloor 
+                      ? "border-cyan-400 bg-cyan-500/25 shadow-[0_0_35px_rgba(6,182,212,0.4)]" 
+                      : "border-sky-500/50 bg-[#0f172a]/80 shadow-[0_0_20px_rgba(14,165,233,0.15)]"
+                  } ${isSectionCut ? "border-r-rose-500 border-r-4" : ""}`}
+                >
+                  {/* Qavat raqami va Lazer marker */}
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5 font-mono text-[10px] text-cyan-300">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                    <span>L{floorNum} ({idx === 0 ? "Kirish" : isTopFloor ? "Tom" : "Turar"})</span>
+                  </div>
+
+                  {/* Shift Balandligi Ko'rsatkichi (Faqat 1-2 qavatda) */}
+                  {idx === 1 && (
+                    <div className="absolute right-2 top-2 px-2 py-0.5 rounded bg-black/70 border border-cyan-500/30 text-[10px] font-mono">
+                      <span className={isCeilingError ? "text-rose-400 font-bold" : "text-cyan-300"}>
+                        H={ceilingHeight}m {isCeilingError ? "(≤2.7m Xato)" : ""}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Ichki Xonalar va Ustunlar To'ri (Section Kesimda Ko'rinadi) */}
+                  {isSectionCut && (
+                    <div className="absolute inset-2 border border-rose-500/40 rounded-lg flex items-center justify-center font-mono text-[10px] text-rose-300 bg-rose-950/20">
+                      <span>Xonadon 3A • Koridor 1.8m</span>
+                    </div>
+                  )}
+
+                  {/* 4 Burchak Ustunlari (Structural BIM Columns) */}
+                  <div className="absolute -top-1 -left-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                  <div className="absolute -bottom-1 -left-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                  <div className="absolute -bottom-1 -right-1 w-2.5 h-2.5 rounded bg-cyan-400 shadow-[0_0_8px_#22d3ee]" />
+                </motion.div>
+              );
+            })}
+
+            {/* Antiseysmik Belbog' Qatlami (QMQ 2.01.03) */}
+            <motion.div
+              animate={{
+                transform: `translateZ(${-60 + (visibleFloors * floorHeightPx) + (isExploded ? visibleFloors * 45 : 0) + 20}px)`,
+              }}
+              style={{ transformStyle: "preserve-3d" }}
+              className="absolute w-48 sm:w-56 h-48 sm:h-56 rounded-2xl border-2 border-purple-500 border-dashed shadow-[0_0_30px_rgba(168,85,247,0.4)] pointer-events-none flex items-center justify-center"
+            >
+              <span className="text-[10px] font-mono text-purple-300 bg-black/80 px-2 py-0.5 rounded border border-purple-500/40">
+                Seysmik chok va karkas ({selectedCity} - 9 ball)
+              </span>
+            </motion.div>
+          </div>
+        </motion.div>
+
+        {/* Sahna Pastidagi Arxitektor Maslahati */}
+        <div className="absolute bottom-3 left-4 text-[10px] font-mono text-cyan-400/80 bg-black/70 border border-cyan-500/20 px-3 py-1.5 rounded-xl backdrop-blur flex items-center gap-2 pointer-events-none">
+          <RotateCw size={13} className="animate-spin" style={{ animationDuration: "12s" }} />
+          <span>Binoni barmoq yoki sichqoncha bilan 360° aylantirishingiz mumkin</span>
         </div>
       </div>
 
-      {/* Pastki Qatlam Holati & Ogohlantirishlar Satri */}
-      <div className="relative z-10 px-4 py-3 bg-[#020617]/90 border-t border-cyan-500/15 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-        <div className="flex items-center gap-4">
+      {/* Pastki Nazorat & Status Bar */}
+      <div className="relative z-20 px-4 py-3 bg-[#020617]/95 border-t border-cyan-500/20 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+        <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className={`w-2.5 h-2.5 rounded-full ${isRampError ? "bg-rose-500 animate-ping" : "bg-emerald-400"}`} />
-            <span className="text-slate-300">ShNQ 2.07 Inkluzivlik:</span>
+            <span className="text-slate-300">ShNQ 2.07 Pandus:</span>
             <strong className={isRampError ? "text-rose-400 font-bold" : "text-emerald-400"}>
               {isRampError ? "RAD ETILDI" : "MUVOFIQ"}
             </strong>
@@ -293,9 +383,9 @@ export default function HolographicBIMViewer({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 text-cyan-400/80">
+        <div className="flex items-center gap-2 text-cyan-400">
           <Compass size={14} />
-          <span>O'zR Qurilish Vazirligi Me'yorlari</span>
+          <span>O'zR Qurilish Vazirligi Standartlari</span>
         </div>
       </div>
     </div>
