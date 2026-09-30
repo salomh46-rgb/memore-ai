@@ -203,23 +203,26 @@ export default function HolographicBIMViewer({
           {/* 2. ZAMIN VA SVAYALI POYDEVOR (Soil & Pile Foundation - 2-rasmdagi kabi) */}
           <g>
             {/* Grunt qatlami */}
-            <rect x="180" y="340" width="380" height="85" fill="url(#ground-gradient)" stroke="#78350f" strokeWidth="1.5" />
-            <text x="190" y="415" fill="#a8a29e" fontSize="10" fontFamily="monospace">
-              GRUNT & SEYSMIK POYDEVOR ASOSI (ShNQ 2.02.01)
-            </text>
+            <rect x="180" y="340" width="380" height="100" fill="url(#ground-gradient)" stroke="#78350f" strokeWidth="1.5" rx="4" />
 
             {/* Temir-beton Svayalar (Piles) */}
             {[210, 245, 280, 315, 350, 385, 420, 455, 490, 525].map((pileX, idx) => (
               <g key={idx}>
-                <rect x={pileX} y="355" width="10" height="60" fill="#94a3b8" stroke="#cbd5e1" strokeWidth="1" />
-                <line x1={pileX} y1="365" x2={pileX + 10} y2="375" stroke="#475569" strokeWidth="1" />
-                <line x1={pileX} y1="385" x2={pileX + 10} y2="395" stroke="#475569" strokeWidth="1" />
+                <rect x={pileX} y="350" width="10" height="50" fill="#94a3b8" stroke="#cbd5e1" strokeWidth="1" rx="1" />
+                <line x1={pileX} y1="360" x2={pileX + 10} y2="370" stroke="#475569" strokeWidth="1" />
+                <line x1={pileX} y1="380" x2={pileX + 10} y2="390" stroke="#475569" strokeWidth="1" />
               </g>
             ))}
 
+            {/* Grunt & Seysmik Asos Matni */}
+            <rect x="200" y="412" width="340" height="20" fill="#1c1917" opacity="0.85" rx="4" stroke="#78350f" strokeWidth="0.8" />
+            <text x="215" y="426" fill="#fcd34d" fontSize="9.5" fontFamily="monospace" fontWeight="bold">
+              GRUNT & SEYSMIK POYDEVOR ASOSI (ShNQ 2.02.01)
+            </text>
+
             {/* Monolit Poydevor Plitasi (Raft Slab) */}
-            <rect x="190" y="325" width="360" height="20" fill="#64748b" stroke="#cbd5e1" strokeWidth="2" />
-            <text x="320" y="339" fill="#0f172a" fontSize="10" fontFamily="monospace" fontWeight="bold">
+            <rect x="190" y="325" width="360" height="20" fill="#64748b" stroke="#cbd5e1" strokeWidth="2" rx="2" />
+            <text x="270" y="339" fill="#0f172a" fontSize="10.5" fontFamily="monospace" fontWeight="bold">
               MONOLIT POYDEVOR PLITASI (RAFT SLAB)
             </text>
           </g>
