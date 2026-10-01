@@ -17,7 +17,7 @@ export default function Hero() {
           <br /> AI Tekshiradi
         </h1>
         <p className="mt-6 text-xl text-gray-300 max-w-2xl mx-auto mb-10">
-          O'zbekistondagi birinchi arxitektura ekspertiza yordamchisi. Loyihangizni xatosiz va tez ekspertizadan o'tkazing.
+          O'zbekistondagi birinchi arxitektura muhandislik yordamchisi. Loyihangizni davlat ekspertizasiga topshirishdan oldin ShNQ va QMQ me'yorlari bo'yicha tezkor audit qiling.
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
@@ -39,15 +39,15 @@ export default function Hero() {
         <div className="mt-16 grid grid-cols-1 sm:grid-cols-3 gap-8 text-sm text-gray-400">
           <div className="flex items-center justify-center gap-2">
             <CheckCircle2 className="text-accent" size={20} />
-            <span>15+ ShNQ qoidasi</span>
+            <span>50+ ShNQ / QMQ qoidasi</span>
           </div>
           <div className="flex items-center justify-center gap-2">
             <CheckCircle2 className="text-accent" size={20} />
-            <span>mc.uz rasmiy hujjatlari</span>
+            <span>mc.uz tasdiqlangan me'yorlari</span>
           </div>
           <div className="flex items-center justify-center gap-2">
             <CheckCircle2 className="text-accent" size={20} />
-            <span>Deterministik Tekshiruv</span>
+            <span>Deterministik Matematik Hisob</span>
           </div>
         </div>
       </motion.div>

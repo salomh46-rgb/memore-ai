@@ -109,8 +109,16 @@ class DXFBlueprintParser:
         raw_texts: List[str] = []
         dimension_values: List[float] = []
 
-        # 2. Entitiylarni sanash va tahlil qilish
+        # 2. Entitiylarni sanash va tahlil qilish (DoS / Zip-bomb himoyasi)
+        MAX_ENTITIES = 50_000
+        processed_count = 0
+
         for entity in msp:
+            processed_count += 1
+            if processed_count > MAX_ENTITIES:
+                logger.warning(f"DXF DoS himoyasi: Chizmadagi elementlar soni {MAX_ENTITIES} dan oshib ketdi. Xotira xavfsizligi uchun tahlil cheklandi.")
+                break
+
             dxftype = entity.dxftype()
             entity_counts[dxftype] = entity_counts.get(dxftype, 0) + 1
 

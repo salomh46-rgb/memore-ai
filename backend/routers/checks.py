@@ -411,10 +411,10 @@ async def verify_check(check_id: str):
     return {
         "verified": True,
         "check_id": check_id,
-        "document_number": f"EXP-{check_id[:8].upper()}-2026",
+        "document_number": f"CALC-{check_id[:8].upper()}-2026",
         "file_name": file_name_str,
         "status": status_val,
-        "compliance_status": "APPROVED" if (isinstance(summary, dict) and summary.get("ekspertiza_ready")) else "FAILED",
+        "compliance_status": "PARAMETRIC_PASS" if (isinstance(summary, dict) and summary.get("ekspertiza_ready")) else "NEEDS_REVISION",
         "total_rules": total_checks,
         "passed_rules": passed,
         "failed_rules": failed,
@@ -422,28 +422,39 @@ async def verify_check(check_id: str):
         "created_at": created_at_str,
         "completed_at": raw_data.get("completed_at"),
         "verification_hash": verification_hash,
-        "issuer": "Me'morAI Yordamchi Ekspertiza Tizimi",
-        "disclaimer": "Bu hujjat litsenziyalangan bosh mutaxassis (GIP) xulosasini almashtirmaydi. Yakuniy qaror faqat litsenziyalangan ekspertda.",
+        "issuer": "Me'morAI Muhandislik Parametrik Tahlil Tizimi",
+        "disclaimer": "Ushbu ma'lumotnoma mustaqil ekspertiza xulosasi hisoblanmaydi va davlat shaharsozlik ekspertizasi o'rnini bosmaydi. Loyiha xavfsizligi bo'yicha javobgarlik O'zR Shaharsozlik kodeksining 37-38 moddalariga binoan GIP va GAP zimmasida qoladi.",
     }
 
 
 @router.get(
     "/{check_id}/pdf",
-    summary="QR-kodli PDF texnik ekspertiza hisobotini yuklab olish",
+    summary="QR-kodli PDF muhandislik hisobotini yuklab olish",
 )
 async def download_pdf_report(
     check_id: str,
+    lang: str = "uz",
     current_user: AuthenticatedUser = Depends(get_current_user),
 ):
     """
-    Tekshiruvning ShNQ va QMQ me'yorlari asosidagi PDF texnik ekspertiza xulosasini qaytaradi.
+    Tekshiruvning ShNQ va QMQ me'yorlari asosidagi PDF muhandislik hisob-kitob ma'lumotnomasini qaytaradi.
     Faqat o'z organization_id ga tegishli tekshiruv PDF'lari ko'rinadi.
+    Path Traversal himoyasi: check_id qat'iy UUID bo'lishi shart.
     """
     from fastapi.responses import FileResponse
     try:
         from backend.services.pdf_generator import PDFReportGenerator
     except ImportError:
         from services.pdf_generator import PDFReportGenerator
+
+    # Path Traversal himoyasi (Strict UUID validation)
+    try:
+        clean_uuid = str(uuid.UUID(str(check_id)))
+    except (ValueError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Yaroqsiz tekshiruv ID formati (faqat haqiqiy UUID qabul qilinadi).",
+        )
 
     # 1. Ma'lumotlarni qidirish (Supabase yoki memory_store)
     check_report: Optional[CheckReport] = None
@@ -483,17 +494,20 @@ async def download_pdf_report(
     reports_dir.mkdir(parents=True, exist_ok=True)
     pdf_gen = PDFReportGenerator(output_dir=reports_dir)
 
+    summary_dict = check_report.summary.model_dump() if check_report.summary else {}
+    summary_dict["lang"] = lang
+
     pdf_file = pdf_gen.generate_report(
-        check_id=check_id,
+        check_id=clean_uuid,
         project_name=check_report.file_name,
         city="Toshkent",
         building_type="residential",
         check_results=[r.model_dump() for r in check_report.results],
-        summary=check_report.summary.model_dump() if check_report.summary else {},
+        summary=summary_dict,
     )
 
     return FileResponse(
         path=str(pdf_file),
-        filename=f"MeMorAI_Ekspertiza_{check_id[:8]}.pdf",
+        filename=f"MeMorAI_Hisobot_{clean_uuid[:8]}.pdf",
         media_type="application/pdf",
     )

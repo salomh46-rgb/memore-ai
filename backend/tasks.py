@@ -62,6 +62,22 @@ except ImportError:
     celery_app = None
 
 
+def _safe_async_run(coro):
+    """Celery worker thread ichida event-loop xatolarisiz asinxron korutinani xavfsiz bajarish."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(lambda: asyncio.run(coro))
+                return future.result()
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        return asyncio.run(coro)
+
+
 def execute_process_drawing(
     check_id: str,
     file_path: str,
@@ -104,7 +120,7 @@ def execute_process_drawing(
         else:
             try:
                 vision_analyzer = GeminiVisionAnalyzer(api_key=settings.GEMINI_API_KEY)
-                raw_vision_data = asyncio.run(vision_analyzer.analyze_drawing_file(file_path))
+                raw_vision_data = _safe_async_run(vision_analyzer.analyze_drawing_file(file_path))
                 if isinstance(raw_vision_data, dict):
                     extraction_source = raw_vision_data.get("extraction_source", "gemini_vision")
                     raw_vision_metadata = {

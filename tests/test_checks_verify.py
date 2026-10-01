@@ -83,15 +83,15 @@ def test_verify_endpoint_success():
 
     assert data["verified"] is True
     assert data["check_id"] == test_id
-    assert data["document_number"] == f"EXP-{test_id[:8].upper()}-2026"
+    assert data["document_number"] == f"CALC-{test_id[:8].upper()}-2026"
     assert data["file_name"] == "turar_joy_loyiha.pdf"
-    assert data["compliance_status"] == "APPROVED"
+    assert data["compliance_status"] == "PARAMETRIC_PASS"
     assert data["total_rules"] == 2
     assert data["passed_rules"] == 2
     assert data["failed_rules"] == 0
     assert len(data["verification_hash"]) == 64  # SHA-256 hex uzunligi
-    assert "Me'morAI Yordamchi Ekspertiza Tizimi" in data["issuer"]
-    assert "litsenziyalangan bosh mutaxassis (GIP)" in data["disclaimer"]
+    assert "Me'morAI" in data["issuer"]
+    assert "GIP" in data["disclaimer"]
 
 
 def test_verify_direct_redirect():

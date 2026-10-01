@@ -110,17 +110,45 @@ class PDFReportGenerator:
 
         elements = []
 
-        # 1. BLANK VA SARLAVHA
-        header_text = """
-        <b>O'ZBEKISTON RESPUBLIKASI QURILISH VA UY-JOY KOMMUNAL XO'JALIGI VAZIRLIGI</b><br/>
-        <b>ME'MORAI YORDAMCHI EKSPERTIZA TIZIMI</b>
-        """
+        # 1. BLANK VA SARLAVHA (Toza yuridik format - davlat atributlarisiz)
+        is_ru = (summary.get("lang") == "ru")
+        if is_ru:
+            header_text = """
+            <b>СИСТЕМА ИНЖЕНЕРНОГО АНАЛИЗА ME'MORAI</b><br/>
+            <b>СПРАВКА ПРОГРАММНОГО ПАРАМЕТРИЧЕСКОГО РАСЧЕТА ПО НОРМАМ КМК / ШНК</b>
+            """
+            sub_title = "СПРАВОЧНЫЙ ОТЧЕТ СООТВЕТСТВИЯ СТРОИТЕЛЬНЫМ НОРМАМ РЕСПУБЛИКИ УЗБЕКИСТАН"
+            doc_type = "<b>ИНЖЕНЕРНАЯ СПРАВКА СООТВЕТСТВИЯ (DATASHEET)</b>"
+            status_pass = "<b><font color='#16a34a'>ПАРАМЕТРИЧЕСКИ СООТВЕТСТВУЕТ (PASS)</font></b>"
+            status_fail = "<b><font color='#dc2626'>ОБНАРУЖЕНЫ НЕСООТВЕТСТВИЯ (FAIL / REVIEW)</font></b>"
+            lbl_doc_num = "Номер расчета:"
+            lbl_proj_name = "Название проекта:"
+            lbl_address = "Локация:"
+            lbl_type = "Тип здания:"
+            lbl_date = "Дата расчета:"
+            lbl_status = "Результат проверки:"
+        else:
+            header_text = """
+            <b>ME'MORAI MUHANDISLIK TAHLIL PLATFORMASI</b><br/>
+            <b>ShNQ VA QMQ ME'YORLARI BO'YICHA DASTURIY PARAMETRIK HISOBLASH MA'LUMOTNOMASI</b>
+            """
+            sub_title = "O'ZBEKISTON RESPUBLIKASI SHAHARSOZLIK ME'YORLARI (ShNQ / QMQ) BO'YICHA MA'LUMOTNOMA"
+            doc_type = "<b>MUHANDISLIK ME'YORIY HISOBLASH MA'LUMOTNOMASI (DATASHEET)</b>"
+            status_pass = "<b><font color='#16a34a'>PARAMETRIK MUVOFIQ (PASS)</font></b>"
+            status_fail = "<b><font color='#dc2626'>NOMUVOFIQLIKLAR ANIQLANDI (FAIL / REVIEW)</font></b>"
+            lbl_doc_num = "Hujjat raqami:"
+            lbl_proj_name = "Loyiha nomi:"
+            lbl_address = "Qurilish manzili:"
+            lbl_type = "Bino toifasi:"
+            lbl_date = "Tekshiruv sanasi:"
+            lbl_status = "Hisob natijasi:"
+
         elements.append(Paragraph(header_text, title_style))
         elements.append(Spacer(1, 2 * mm))
-        elements.append(Paragraph("DAVLAT ME'YORIY HUJJATLARI (ShNQ va QMQ)GA MUVOFIQLIK TO'G'RISIDA", subtitle_style))
+        elements.append(Paragraph(sub_title, subtitle_style))
         elements.append(Spacer(1, 2 * mm))
-        elements.append(Paragraph("<b>TEXNIK EKSPERTIZA XULOSASI (DALOLATNOMA)</b>", ParagraphStyle(
-            "BoldTitle", parent=title_style, fontSize=12, textColor=colors.HexColor("#0284c7")
+        elements.append(Paragraph(doc_type, ParagraphStyle(
+            "BoldTitle", parent=title_style, fontSize=11, textColor=colors.HexColor("#0284c7")
         )))
         elements.append(Spacer(1, 3 * mm))
         elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=10))
@@ -144,15 +172,15 @@ class PDFReportGenerator:
 
         # 3. LOYIHA METADATA JADVALI
         now_str = datetime.now().strftime("%d.%m.%Y, %H:%M")
-        status_text = "<b><font color='#16a34a'>IJOBIY (EKSPERTIZADAN O'TDI)</font></b>" if summary.get("ekspertiza_ready") else "<b><font color='#dc2626'>RAD ETILDI (MUAMMOLAR MAVJUD)</font></b>"
+        status_text = status_pass if summary.get("ekspertiza_ready") else status_fail
 
         meta_data = [
-            [Paragraph("<b>Hujjat raqami:</b>", body_style), Paragraph(f"EXP-{check_id[:8].upper()}-2026", body_bold), qr_flowable],
-            [Paragraph("<b>Loyiha nomi:</b>", body_style), Paragraph(project_name, body_bold), ""],
-            [Paragraph("<b>Qurilish manzili:</b>", body_style), Paragraph(f"{city} shahri (Seysmik zona: 9 ball)", body_style), ""],
-            [Paragraph("<b>Bino toifasi:</b>", body_style), Paragraph(f"Turar-joy ko'p qavatli bino ({building_type})", body_style), ""],
-            [Paragraph("<b>Tekshiruv sanasi:</b>", body_style), Paragraph(now_str, body_style), ""],
-            [Paragraph("<b>Ekspertiza xulosasi:</b>", body_style), Paragraph(status_text, body_style), ""],
+            [Paragraph(f"<b>{lbl_doc_num}</b>", body_style), Paragraph(f"CALC-{check_id[:8].upper()}-2026", body_bold), qr_flowable],
+            [Paragraph(f"<b>{lbl_proj_name}</b>", body_style), Paragraph(project_name, body_bold), ""],
+            [Paragraph(f"<b>{lbl_address}</b>", body_style), Paragraph(f"{city} (Seysmik zona: 9 ball)", body_style), ""],
+            [Paragraph(f"<b>{lbl_type}</b>", body_style), Paragraph(f"Ko'p qavatli bino ({building_type})", body_style), ""],
+            [Paragraph(f"<b>{lbl_date}</b>", body_style), Paragraph(now_str, body_style), ""],
+            [Paragraph(f"<b>{lbl_status}</b>", body_style), Paragraph(status_text, body_style), ""],
         ]
 
         if source_metadata:
@@ -259,30 +287,48 @@ class PDFReportGenerator:
         elements.append(results_table)
         elements.append(Spacer(1, 6 * mm))
 
-        # 6. ELEKTRON VERIFIKATSIYA VA XULOSA BLOKI
+        # 6. YURIDIK JAVOBGARLIKNI CHEKLASH VA ALGORITMIK VERIFIKATSIYA BLOKI
+        if is_ru:
+            legal_disclaimer = """
+            <b>Юридическое уведомление и разграничение ответственности (ГК и Градостроительный кодекс РУз):</b><br/>
+            <i>Настоящий расчет сформирован автоматически программным комплексом Me'morAI и носит справочно-консультационный характер. Справка не является официальным экспертным заключением ГУП «Экспертиза градостроительной документации» и не заменяет государственную экспертизу. Полная ответственность за безопасность, конструктивную надежность и соответствие проекта строительным нормам возлагается на Главного инженера проекта (ГИП) и Главного архитектора проекта (ГАП) согласно Градостроительному кодексу Республики Узбекистан.</i>
+            """
+            stamp_title = "<b>[ АЛГОРИТМИЧЕСКИЙ ХЕШ РАСЧЕТА ]</b>"
+            stamp_system = "<b>ME'MORAI PARAMETRIC ENGINE</b>"
+            stamp_status = "<font color='#0284c7'><b>СТАТУС: РАСЧЕТ ЗАВЕРШЕН</b></font>"
+        else:
+            legal_disclaimer = """
+            <b>Yuridik Ma'lumotnoma va Javobgarlik Cheklovi (O'zR Shaharsozlik Kodeksi):</b><br/>
+            <i>Ushbu ma'lumotnoma Me'morAI dasturiy vositasi orqali avtomatik shakllantirilgan bo'lib, axborot-tahliliy xarakterga ega. Ushbu hujjat davlat shaharsozlik ekspertizasi xulosasi hisoblanmaydi va uning o'rnini bosmaydi. Loyiha xavfsizligi, konstruktiv mustahkamligi va yakuniy me'yoriy muvofiqligi bo'yicha to'liq yuridik javobgarlik O'zbekiston Respublikasi Shaharsozlik kodeksining 37-38 moddalariga muvofiq Bosh loyiha muhandisi (GIP) va Bosh loyiha me'mori (GAP) zimmasida qoladi.</i>
+            """
+            stamp_title = "<b>[ DASTURIY TEKSHIRUV HESHI ]</b>"
+            stamp_system = "<b>ME'MORAI PARAMETRIC ENGINE</b>"
+            stamp_status = "<font color='#0284c7'><b>HOLAT: HISOBLASH YAKUNLANDI</b></font>"
+
         signature_data = [
             [
+                Paragraph(legal_disclaimer, body_style),
                 Paragraph("""
-                <b>Avtomatlashtirilgan Tizim Xulosasi:</b><br/>
-                Me'morAI Yordamchi Ekspertiza Tizimi<br/>
-                <i>Bu hujjat litsenziyalangan bosh mutaxassis (GIP) xulosasini almashtirmaydi. Yakuniy qaror faqat litsenziyalangan ekspertda.</i><br/>
-                Haqiqiylikni tekshirish uchun QR-kodni skanerlang.
-                """, body_style),
-                Paragraph("""
-                <b>[ ELEKTRON VERIFIKATSIYA MUHRI ]</b><br/>
-                <font color='#0284c7'><b>★ O'ZBEKISTON RESPUBLIKASI ★</b></font><br/>
-                <b>ME'MORAI EXPERTISE VERIFIED</b><br/>
+                {stamp_title}<br/>
+                {stamp_system}<br/>
                 ID: {check_id_short} • DATE: {date_now}<br/>
-                <font color='#16a34a'><b>STATUS: APPROVED / LEGAL COMPLIANT</b></font>
-                """.format(check_id_short=check_id[:8].upper(), date_now=now_str[:10]), ParagraphStyle(
+                ENGINE: QMQRulesEngine v1.0.0<br/>
+                {stamp_status}
+                """.format(
+                    stamp_title=stamp_title,
+                    stamp_system=stamp_system,
+                    check_id_short=check_id[:8].upper(),
+                    date_now=now_str[:10],
+                    stamp_status=stamp_status
+                ), ParagraphStyle(
                     "Stamp", parent=body_style, alignment=1, textColor=colors.HexColor("#0f172a")
                 ))
             ]
         ]
-        sig_table = Table(signature_data, colWidths=[10.5 * cm, 7.0 * cm])
+        sig_table = Table(signature_data, colWidths=[11.0 * cm, 6.5 * cm])
         sig_table.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("BOX", (1, 0), (1, -1), 1.5, colors.HexColor("#0284c7")),
+            ("BOX", (1, 0), (1, -1), 1.0, colors.HexColor("#64748b")),
             ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#f8fafc")),
             ("TOPPADDING", (0, 0), (-1, -1), 6),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 6),

@@ -503,11 +503,11 @@ export default function WorkspaceApp() {
                 <div>
                   <h2 className="text-base sm:text-xl font-bold font-mono text-white">
                     {failCount > 0 
-                      ? `🔴 DAVLAT EKSPERTIZASIDAN O'TMAYDI (${failCount} TA QOIDABUZARLIK)` 
-                      : "🟢 DAVLAT EKSPERTIZASIGA TO'LIQ TAYYOR"}
+                      ? `🔴 ME'YORIY NOMUVOFIQLIKLAR ANIQLANDI (${failCount} TA TAQIQ)` 
+                      : "🟢 ShNQ / QMQ ME'YORLARIGA PARAMETRIK MOS (PASS)"}
                   </h2>
                   <p className="text-xs font-mono text-slate-300 mt-1">
-                    {file ? file.name : "Kiritilgan BIM parametrlari"} • {passCount} ta talab bajarildi, {failCount} ta jiddiy xato aniqlandi
+                    {file ? file.name : "Kiritilgan BIM parametrlari"} • {passCount} ta talab bajarildi, {failCount} ta cheklovdan oshish aniqlandi
                   </p>
                 </div>
               </div>
@@ -516,10 +516,10 @@ export default function WorkspaceApp() {
                 <button
                   onClick={handleDownloadReport}
                   className="flex-1 sm:flex-none px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500/30 to-blue-600/30 hover:from-cyan-500/40 hover:to-blue-600/40 text-cyan-200 border border-cyan-400/50 font-mono font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all"
-                  title="ShNQ va QMQ andozasidagi QR-kodli texnik xulosa"
+                  title="ShNQ va QMQ andozasidagi QR-kodli muhandislik hisobot ma'lumotnomasi"
                 >
                   <Download size={16} className="text-cyan-400" />
-                  <span>📄 Texnik Ekspertiza PDF (QR)</span>
+                  <span>📄 Muhandislik Hisoboti PDF (QR)</span>
                 </button>
                 <button
                   onClick={() => setResults(null)}
@@ -529,6 +529,14 @@ export default function WorkspaceApp() {
                   <RefreshCw size={16} />
                 </button>
               </div>
+            </div>
+
+            {/* Qonuniy Mas'uliyat Cheklovi (Legal Disclaimer) */}
+            <div className="mt-4 pt-3.5 border-t border-white/10 flex items-start gap-2.5 text-[11px] font-mono text-slate-400">
+              <ShieldAlert size={15} className="text-amber-400 shrink-0 mt-0.5" />
+              <p>
+                <strong>Yuridik Eslatma (O'zR Shaharsozlik Kodeksi 37-38 moddalari):</strong> Ushbu ma'lumotnoma axborot-muhandislik hisobi bo'lib, davlat shaharsozlik ekspertizasi o'rnini bosmaydi. Konstruktiv xavfsizlik va loyiha yechimlari bo'yicha yakuniy javobgarlik Bosh loyiha muhandisi (GIP) va Bosh loyiha me'mori (GAP) zimmasida qoladi.
+              </p>
             </div>
           </div>
 
