@@ -75,7 +75,7 @@ DEMO_LIMIT_REACHED = (
     "🔒 **Bepul demo imkoniyatingizdan foydalandingiz!**\n\n"
     "Siz 1 ta bepul tekshiruv huquqini ishlatib bo'ldingiz.\n\n"
     "To'liq arxitektura loyihasini (PDF, DWG chizmalar) 40+ QMQ/ShNQ normalari bo'yicha "
-    "avtomatik tekshirish va rasmiy ekspertiza xulosasini olish uchun **Me'morAI Pro** versiyasiga o'ting!"
+    "avtomatik tekshirish va texnik ekspertiza xulosasini olish uchun **Me'morAI Pro** versiyasiga o'ting!"
 )
 
 # Natija shablonlari
@@ -90,7 +90,7 @@ CTA_MESSAGE = (
     "🏢 **Me'morAI Pro imkoniyatlari:**\n"
     "• PDF/DWG chizmalarni 1 klikda to'liq tekshirish\n"
     "• 40+ ShNQ/QMQ moddalari bo'yicha tahlil\n"
-    "• Davlat ekspertizasidan 100% o'tish kafolati\n"
+    "• Davlat ekspertizasidan muvaffaqiyatli o'tishga tayyorgarlik\n"
     "• Qayta topshirish xarajatlarini 10 barobar qisqartirish\n\n"
     "👉 Hoziroq to'liq versiyani sinab ko'ring:"
 )

@@ -1,7 +1,7 @@
 """
-Me'morAI — Rasmiy Muhrli PDF Ekspertiza Hisoboti Generatori
+Me'morAI — Texnik Ekspertiza Xulosasi PDF Generatori
 O'zbekiston Respublikasi Qurilish Vazirligi (mc.uz) ShNQ va QMQ talablari asosida
-QR-kodli, raqamli muhrli rasmiy arxitektura xulosasi hujjati (PDF).
+QR-kodli, raqamli muhrli arxitektura texnik xulosasi hujjati (PDF).
 """
 import io
 import os
@@ -27,7 +27,7 @@ from reportlab.platypus import (
 
 
 class PDFReportGenerator:
-    """Rasmiy ShNQ/QMQ arxitektura ekspertizasi PDF hujjati generatori."""
+    """ShNQ/QMQ arxitektura texnik ekspertizasi PDF hujjati generatori."""
 
     def __init__(self, output_dir: Optional[Path | str] = None):
         self.output_dir = Path(output_dir or "uploads/reports")
@@ -42,9 +42,10 @@ class PDFReportGenerator:
         check_results: List[Dict[str, Any]],
         summary: Dict[str, Any],
         output_filename: Optional[str] = None,
+        source_metadata: Optional[Dict[str, Any]] = None,
     ) -> Path:
         """
-        To'liq rasmiy ekspertiza xulosasi PDF faylini yaratadi.
+        To'liq texnik ekspertiza xulosasi PDF faylini yaratadi.
         """
         if not output_filename:
             output_filename = f"Ekspertiza_Xulosasi_{check_id[:8]}.pdf"
@@ -109,23 +110,24 @@ class PDFReportGenerator:
 
         elements = []
 
-        # 1. GERB VA YUQORI RASMIY BLANK
+        # 1. BLANK VA SARLAVHA
         header_text = """
         <b>O'ZBEKISTON RESPUBLIKASI QURILISH VA UY-JOY KOMMUNAL XO'JALIGI VAZIRLIGI</b><br/>
-        <b>ME'MORAI AVTOMATLASHTIRILGAN SHAHARSOZLIK VA LOYIHA HUJJATLARI EKSPERTIZASI TIZIMI</b>
+        <b>ME'MORAI YORDAMCHI EKSPERTIZA TIZIMI</b>
         """
         elements.append(Paragraph(header_text, title_style))
         elements.append(Spacer(1, 2 * mm))
         elements.append(Paragraph("DAVLAT ME'YORIY HUJJATLARI (ShNQ va QMQ)GA MUVOFIQLIK TO'G'RISIDA", subtitle_style))
         elements.append(Spacer(1, 2 * mm))
-        elements.append(Paragraph("<b>RASMIY EKSPERT XULOSASI (DALOLATNOMA)</b>", ParagraphStyle(
+        elements.append(Paragraph("<b>TEXNIK EKSPERTIZA XULOSASI (DALOLATNOMA)</b>", ParagraphStyle(
             "BoldTitle", parent=title_style, fontSize=12, textColor=colors.HexColor("#0284c7")
         )))
         elements.append(Spacer(1, 3 * mm))
         elements.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#0284c7"), spaceAfter=10))
 
         # 2. QR-KOD GENERATSIYASI (Haqiqiylikni tekshirish uchun)
-        verify_url = f"https://memore.62.171.143.55.sslip.io/verify/{check_id}"
+        base_url = os.getenv("BASE_URL", "https://api-memore.62.171.143.55.sslip.io").rstrip("/")
+        verify_url = f"{base_url}/api/checks/{check_id}/verify"
         qr = qrcode.QRCode(
             version=1,
             error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -152,6 +154,26 @@ class PDFReportGenerator:
             [Paragraph("<b>Tekshiruv sanasi:</b>", body_style), Paragraph(now_str, body_style), ""],
             [Paragraph("<b>Ekspertiza xulosasi:</b>", body_style), Paragraph(status_text, body_style), ""],
         ]
+
+        if source_metadata:
+            src = source_metadata.get("extraction_source", "user_declared")
+            if src == "gemini_vision":
+                src_label = "AI Gemini Vision (Chizmadan olingan)"
+            elif src == "cad_dxf":
+                src_label = "CAD DXF Geometriya (Chizmadan olingan)"
+            elif src == "extraction_failed":
+                src_label = "<font color='#d97706'>Chizma tahlili muvaffaqiyatsiz (Ko'rik talab etiladi)</font>"
+            else:
+                src_label = "Foydalanuvchi deklaratsiyasi"
+
+            if source_metadata.get("has_conflicts"):
+                src_label += " | <font color='#dc2626'>[Nomuvofiqlik aniqlangan]</font>"
+
+            meta_data.append([
+                Paragraph("<b>Ma'lumot manbasi:</b>", body_style),
+                Paragraph(src_label, body_style),
+                "",
+            ])
 
         meta_table = Table(meta_data, colWidths=[3.5 * cm, 10.5 * cm, 3.5 * cm])
         meta_table.setStyle(TableStyle([
@@ -237,17 +259,17 @@ class PDFReportGenerator:
         elements.append(results_table)
         elements.append(Spacer(1, 6 * mm))
 
-        # 6. RAQAMLI MUHR VA IMZO BLOKI (Official Electronic Stamp)
+        # 6. ELEKTRON VERIFIKATSIYA VA XULOSA BLOKI
         signature_data = [
             [
                 Paragraph("""
-                <b>Avtomatlashtirilgan Tizim Bosh Me'mori:</b><br/>
-                Me'morAI Davlat Standartlari Sun'iy Intellekti<br/>
-                <i>Hujjat yuridik kuchga ega va elektron imzolangan.</i><br/>
-                Tekshirish uchun QR-kodni skanerlang.
+                <b>Avtomatlashtirilgan Tizim Xulosasi:</b><br/>
+                Me'morAI Yordamchi Ekspertiza Tizimi<br/>
+                <i>Bu hujjat litsenziyalangan bosh mutaxassis (GIP) xulosasini almashtirmaydi. Yakuniy qaror faqat litsenziyalangan ekspertda.</i><br/>
+                Haqiqiylikni tekshirish uchun QR-kodni skanerlang.
                 """, body_style),
                 Paragraph("""
-                <b>[ RAQAMLI MUHR / DIGITAL STAMP ]</b><br/>
+                <b>[ ELEKTRON VERIFIKATSIYA MUHRI ]</b><br/>
                 <font color='#0284c7'><b>★ O'ZBEKISTON RESPUBLIKASI ★</b></font><br/>
                 <b>ME'MORAI EXPERTISE VERIFIED</b><br/>
                 ID: {check_id_short} • DATE: {date_now}<br/>

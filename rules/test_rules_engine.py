@@ -232,6 +232,51 @@ def test_extended_50_plus_rules():
         assert r.status == CheckStatus.PASS, f"Kutilmagan xato: {r.rule_id} -> {r.message_uz}"
 
 
+# ─── P0-4 & P0-5 FIX TESTLARI ───────────────────────────────
+
+def test_empty_input_not_ready():
+    """Bo'sh input bilan ekspertiza_ready=False bo'lishi kerak (P0-4 fix)"""
+    results = engine.run_all_checks({})
+    summary = engine.summary(results)
+    assert summary["total_checks"] == 0
+    assert summary["passed"] == 0
+    assert summary["failed"] == 0
+    assert summary["unknown"] == 0
+    assert summary["ekspertiza_ready"] is False
+
+
+def test_alias_resolution_and_no_duplicates():
+    """Aliaslar self.rules da takrorlanmasligi va get_rule to'g'ri ishlashi (P0-5 fix)"""
+    # 1. Alias ID lar self.rules kalitlarida to'g'ridan-to'g'ri bo'lmasligi kerak
+    for legacy_id in engine.ID_ALIASES.keys():
+        assert legacy_id not in engine.rules, f"Alias {legacy_id} self.rules ichida bo'lmasligi kerak"
+
+    # 2. get_rule aliasni canonical qoidaga yo'naltirishi kerak
+    rule = engine.get_rule("UZ-ACCESS-001")
+    assert rule is not None
+    assert rule["id"] == "UZ-ACC-001"
+
+    rule_canonical = engine.get_rule("UZ-ACC-001")
+    assert rule_canonical is not None
+    assert rule_canonical["id"] == "UZ-ACC-001"
+
+    # 3. Dynamic sikl va statik tekshiruvlar natijasida rule_id dublikat chiqmasligi kerak
+    building = {
+        "ceiling_height_m": 2.8,
+        "apartments": 48,
+        "parking_spots": 52,
+        "ramp_rise_m": 0.5,
+        "ramp_run_m": 6.5,
+        "ramp_width_m": 1.2,
+        "fire_access_road_width_m": 7.0,
+        "evacuation_door_width_m": 0.95,
+        "living_room_area_sqm": 18.5,
+    }
+    results = engine.run_all_checks(building)
+    rule_ids = [r.rule_id for r in results]
+    assert len(rule_ids) == len(set(rule_ids)), f"Dublikat qoidalar topildi: {rule_ids}"
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("Me'morAI QMQ/ShNQ Qoidalar Dvigateli Testlari")
@@ -259,6 +304,8 @@ if __name__ == "__main__":
         test_full_building_check_passing,
         test_full_building_check_failing,
         test_extended_50_plus_rules,
+        test_empty_input_not_ready,
+        test_alias_resolution_and_no_duplicates,
     ]
 
     passed = 0

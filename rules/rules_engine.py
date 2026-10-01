@@ -88,14 +88,14 @@ class QMQRulesEngine:
             rules_path = Path(__file__).parent / "qmq_rules_v1.json"
         with open(rules_path, encoding="utf-8") as f:
             data = json.load(f)
-        self.rules: dict[str, dict] = {r["id"]: r for r in data["rules"]}
-        # Aliaslarni ham self.rules ga qo'shamiz (backward compatibility)
-        for legacy_id, target_id in self.ID_ALIASES.items():
-            if target_id in self.rules and legacy_id not in self.rules:
-                alias_rule = dict(self.rules[target_id])
-                alias_rule["id"] = legacy_id
-                self.rules[legacy_id] = alias_rule
+        self.rules: dict[str, dict] = {r["id"]: r for r in data["rules"]}  # faqat canonical, alias emas
+        self.legacy_ids: dict[str, str] = {k: v for k, v in self.ID_ALIASES.items()}  # eski -> yangi lug'at
         self.meta = data["_meta"]
+
+    def get_rule(self, rule_id: str) -> dict | None:
+        """Qoidani ID yoki alias bo'yicha olish (canonical ID ga yo'naltiriladi)."""
+        canonical = self.legacy_ids.get(rule_id, rule_id)
+        return self.rules.get(canonical)
 
     # ─────────────────────────────────────────
     # 1. YONG'IN XAVFSIZLIGI
@@ -188,16 +188,17 @@ class QMQRulesEngine:
         source_page: int | None = None,
         evidence_bbox: list[float] | None = None,
     ) -> CheckResult:
-        rule = self.rules["UZ-ACCESS-001"]
+        rule = self.get_rule("UZ-ACC-001")
+        rule_id = rule["id"]
         if run_m <= 0:
-            return self._insufficient("UZ-ACCESS-001", rule, "Pandus uzunligi 0 yoki noaniq")
+            return self._insufficient(rule_id, rule, "Pandus uzunligi 0 yoki noaniq")
 
         slope_percent = (rise_m / run_m) * 100
         max_val = rule["max_value"]
         passed = slope_percent <= max_val
 
         return CheckResult(
-            rule_id="UZ-ACCESS-001",
+            rule_id=rule_id,
             code=rule["code"],
             clause=rule["clause"],
             category=rule["category"],
@@ -225,12 +226,13 @@ class QMQRulesEngine:
         confidence: float = 1.0,
         source_page: int | None = None,
     ) -> CheckResult:
-        rule = self.rules["UZ-ACCESS-002"]
+        rule = self.get_rule("UZ-ACC-002")
+        rule_id = rule["id"]
         min_val = 1.5 if is_major_transport_hub else rule["min_value"]
         passed = actual_width_m >= min_val
 
         return CheckResult(
-            rule_id="UZ-ACCESS-002",
+            rule_id=rule_id,
             code=rule["code"],
             clause=rule["clause"],
             category=rule["category"],
@@ -262,7 +264,8 @@ class QMQRulesEngine:
         source_page: int | None = None,
         evidence_bbox: list[float] | None = None,
     ) -> CheckResult:
-        rule = self.rules["UZ-FIRE-EVAC-001"]
+        rule = self.get_rule("UZ-FIRE-010")
+        rule_id = rule["id"]
         type_map = {
             "residential_apartment": 0.80,
             "public_corridor": 0.90,
@@ -272,7 +275,7 @@ class QMQRulesEngine:
         passed = actual_clear_width_m >= min_val
 
         return CheckResult(
-            rule_id="UZ-FIRE-EVAC-001",
+            rule_id=rule_id,
             code=rule["code"],
             clause=rule["clause"],
             category=rule["category"],
@@ -306,16 +309,17 @@ class QMQRulesEngine:
         confidence: float = 1.0,
         source_page: int | None = None,
     ) -> CheckResult:
-        rule = self.rules["UZ-PARKING-001"]
+        rule = self.get_rule("UZ-URBAN-005")
+        rule_id = rule["id"]
         if total_apartments <= 0:
-            return self._insufficient("UZ-PARKING-001", rule, "Xonadonlar soni noaniq")
+            return self._insufficient(rule_id, rule, "Xonadonlar soni noaniq")
 
         ratio = total_parking_spots / total_apartments
         min_val = rule["min_value"]
         passed = ratio >= min_val
 
         return CheckResult(
-            rule_id="UZ-PARKING-001",
+            rule_id=rule_id,
             code=rule["code"],
             clause=rule["clause"],
             category=rule["category"],
@@ -357,12 +361,13 @@ class QMQRulesEngine:
         source_page: int | None = None,
         evidence_bbox: list[float] | None = None,
     ) -> CheckResult:
-        rule = self.rules["UZ-CEILING-001"]
+        rule = self.get_rule("UZ-RES-001")
+        rule_id = rule["id"]
         min_val = 2.70 if construction_type == "new" else 2.50
         passed = actual_height_m >= min_val
 
         return CheckResult(
-            rule_id="UZ-CEILING-001",
+            rule_id=rule_id,
             code=rule["code"],
             clause=rule["clause"],
             category=rule["category"],
@@ -393,8 +398,8 @@ class QMQRulesEngine:
     # ─────────────────────────────────────────
 
     def get_seismic_zone(self, city: str) -> int | None:
-        rule = self.rules["UZ-SEISMIC-001"]
-        return rule["zones"].get(city)
+        rule = self.get_rule("UZ-SEISMIC-001")
+        return rule["zones"].get(city) if rule else None
 
     # ─────────────────────────────────────────
     # YORDAMCHI METODLAR
@@ -403,8 +408,9 @@ class QMQRulesEngine:
     def _insufficient(
         self, rule_id: str, rule: dict, reason: str
     ) -> CheckResult:
+        canonical_id = self.legacy_ids.get(rule_id, rule_id)
         return CheckResult(
-            rule_id=rule_id,
+            rule_id=canonical_id,
             code=rule["code"],
             clause=rule["clause"],
             category=rule["category"],
@@ -472,7 +478,7 @@ class QMQRulesEngine:
             ))
 
         # Dinamik qoidalar (50+ ta me'yor avtomatik baholanadi)
-        checked_rules = {r.rule_id for r in results}
+        checked_rules = {self.legacy_ids.get(r.rule_id, r.rule_id) for r in results}
         for rule_id, rule in self.rules.items():
             if rule_id in checked_rules:
                 continue
@@ -522,17 +528,24 @@ class QMQRulesEngine:
 
     def summary(self, results: list[CheckResult]) -> dict:
         total = len(results)
-        passed = sum(1 for r in results if r.status == CheckStatus.PASS)
-        failed = sum(1 for r in results if r.status == CheckStatus.FAIL)
-        critical_failed = sum(
-            1 for r in results
-            if r.status == CheckStatus.FAIL and r.severity == Severity.CRITICAL
+        passed = sum(r.status == CheckStatus.PASS for r in results)
+        failed = sum(r.status == CheckStatus.FAIL for r in results)
+        unknown = sum(
+            r.status in (CheckStatus.INSUFFICIENT_EVIDENCE, CheckStatus.REQUIRES_REVIEW)
+            for r in results
         )
+        critical_failed = sum(
+            r.status == CheckStatus.FAIL and r.severity == Severity.CRITICAL
+            for r in results
+        )
+        coverage = total / max(len(self.rules), 1)  # canonical qoidalar soni
         return {
             "total_checks": total,
             "passed": passed,
             "failed": failed,
+            "unknown": unknown,
             "critical_failures": critical_failed,
-            "pass_rate_percent": round(passed / total * 100, 1) if total else 0,
-            "ekspertiza_ready": failed == 0,
+            "coverage_percent": round(coverage * 100, 1),
+            "pass_rate_percent": round(passed / max(total, 1) * 100, 1),
+            "ekspertiza_ready": total > 0 and failed == 0 and unknown == 0,
         }

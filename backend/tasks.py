@@ -71,36 +71,91 @@ def execute_process_drawing(
     Chizmani tekshirishning asosiy mantiqiy funksiyasi.
     1. Gemini Vision orqali chizmani multimodal skanerlash (agar parametrlar to'liq bo'lmasa)
     2. QMQRulesEngine orqali barcha 50+ me'yorlarni tekshirish
-    3. QR-kodli va rasmiy muhrli PDF ekspertiza hisoboti generatsiya qilish
+    3. QR-kodli va muhrli PDF texnik ekspertiza hisoboti generatsiya qilish
     """
     logger.info(f"Tekshiruv boshlandi [check_id={check_id}, file={file_path}]")
     completed_at = datetime.now(timezone.utc).isoformat()
 
     try:
         import asyncio
-        data = dict(building_data or {})
 
         # 1. BLUEPRINT EXTRACTION (CAD DXF vs MULTIMODAL VISION)
         ext = Path(file_path).suffix.lower()
+        extracted_params: Dict[str, Any] = {}
+        extraction_source = "unknown"
+        raw_vision_metadata: Dict[str, Any] = {}
+        extraction_failed = False
+
         if ext in (".dxf", ".dwg"):
+            extraction_source = "cad_dxf"
             try:
                 cad_parser = DXFBlueprintParser()
                 cad_result = cad_parser.parse_dxf_file(file_path)
                 if cad_result.is_valid and cad_result.extracted_parameters:
                     logger.info(f"CAD DXF dan parametrlar olindi: {list(cad_result.extracted_parameters.keys())}")
-                    data = {**cad_result.extracted_parameters, **data}
-                elif cad_result.error_message:
-                    logger.warning(f"CAD tahlilida eslatma: {cad_result.error_message}")
+                    extracted_params = dict(cad_result.extracted_parameters)
+                else:
+                    if cad_result.error_message:
+                        logger.warning(f"CAD tahlilida eslatma: {cad_result.error_message}")
+                    extraction_failed = True
             except Exception as cad_err:
                 logger.warning(f"DXF parserda xatolik: {cad_err}")
+                extraction_failed = True
         else:
             try:
                 vision_analyzer = GeminiVisionAnalyzer(api_key=settings.GEMINI_API_KEY)
-                extracted_params = asyncio.run(vision_analyzer.analyze_drawing_file(file_path))
-                logger.info(f"Gemini Vision parametrlari ajratildi: {list(extracted_params.keys())}")
-                data = {**extracted_params, **data}
+                raw_vision_data = asyncio.run(vision_analyzer.analyze_drawing_file(file_path))
+                if isinstance(raw_vision_data, dict):
+                    extraction_source = raw_vision_data.get("extraction_source", "gemini_vision")
+                    raw_vision_metadata = {
+                        k: v for k, v in raw_vision_data.items()
+                        if k in ("confidence_score", "notes", "detected_rooms")
+                    }
+                    if extraction_source == "extraction_failed":
+                        extraction_failed = True
+                        extracted_params = {}
+                    else:
+                        extracted_params = {
+                            k: v for k, v in raw_vision_data.items()
+                            if k not in ("extraction_source", "confidence_score", "notes", "detected_rooms")
+                        }
+                else:
+                    extraction_source = "extraction_failed"
+                    extraction_failed = True
+                    extracted_params = {}
+                logger.info(f"Gemini Vision tahlili (source={extraction_source}): {list(extracted_params.keys())}")
             except Exception as v_err:
                 logger.warning(f"Vision ekstraktorida ogohlantirish: {v_err}")
+                extraction_source = "extraction_failed"
+                extraction_failed = True
+                extracted_params = {}
+
+        # P0-2 FIX: Qiymat manbasi belgisi (Value source tagging & conflict detection)
+        values_with_source: Dict[str, Dict[str, Any]] = {}
+        for k, v in extracted_params.items():
+            values_with_source[k] = {"value": v, "source": "extracted"}
+        for k, v in (building_data or {}).items():
+            if k in values_with_source:
+                # Nomuvofiqlik: ikkala manba bir-biridan farq qilsa
+                values_with_source[k]["user_declared"] = v
+                values_with_source[k]["conflict"] = True
+            else:
+                values_with_source[k] = {"value": v, "source": "user_declared"}
+
+        # Dvigatelga faqat qiymatlarni bering (manba metadata alohida saqlanadi)
+        data = {k: v["value"] for k, v in values_with_source.items()}
+
+        has_conflicts = any(v.get("conflict", False) for v in values_with_source.values())
+        vision_source_metadata = {
+            "extraction_source": extraction_source,
+            "extraction_failed": extraction_failed,
+            "has_conflicts": has_conflicts,
+            "values_with_source": values_with_source,
+            **raw_vision_metadata,
+        }
+
+        # Vision xatosida ExtractionFailed exception o'rniga check holatini "requires_review" ga o'tkazish
+        final_status = "requires_review" if extraction_failed else "completed"
 
         # 2. QMQRULESENGINE TEKSHIRUVI (50+ ta ShNQ / QMQ me'yorlari)
         engine = QMQRulesEngine() if QMQRulesEngine else None
@@ -139,7 +194,7 @@ def execute_process_drawing(
             ]
             summary_data = engine.summary(raw_results)
 
-        # 3. RASMIY MUHRLI PDF HISOBOT GENERATSIYASI (QR-kodli)
+        # 3. TEXNIK EKSPERTIZA PDF HISOBOT GENERATSIYASI (QR-kodli)
         pdf_path_str = None
         pdf_url_str = None
         try:
@@ -153,45 +208,77 @@ def execute_process_drawing(
                 building_type=data.get("building_type", "residential"),
                 check_results=results_list,
                 summary=summary_data,
+                source_metadata=vision_source_metadata,
             )
             pdf_path_str = str(pdf_file)
             pdf_url_str = f"/api/checks/{check_id}/pdf"
-            logger.info(f"✅ Rasmiy PDF Ekspertiza hisoboti yaratildi: {pdf_path_str}")
+            logger.info(f"✅ Texnik PDF Ekspertiza hisoboti yaratildi: {pdf_path_str}")
         except Exception as pdf_err:
             logger.error(f"PDF hisobot generatsiyasida xato: {pdf_err}")
 
         update_payload = {
-            "status": "completed",
+            "status": final_status,
             "results": results_list,
             "summary": summary_data,
             "pdf_report_path": pdf_path_str,
             "pdf_report_url": pdf_url_str,
+            "vision_source_metadata": vision_source_metadata,
             "completed_at": completed_at,
-            "error_message": None,
+            "error_message": "Chizmadan o'lchamlar avtomatik ajratilmadi. Mutaxassis ko'rigi talab etiladi." if extraction_failed else None,
         }
 
         supabase = get_supabase()
         if supabase:
             try:
-                supabase.table("checks").update(update_payload).eq("id", check_id).execute()
+                comp_payload = {
+                    "status": final_status,
+                    "total_rules": summary_data.get("total_checks", len(results_list)),
+                    "passed_count": summary_data.get("passed", 0),
+                    "failed_count": summary_data.get("failed", 0),
+                    "warning_count": 0,
+                    "compliance_score": summary_data.get("pass_rate_percent", 0.0),
+                    "compliance_results": {
+                        "version": "1.0.0",
+                        "rules_engine": "QMQRulesEngine",
+                        "violations": results_list,
+                        "summary": summary_data,
+                        "pdf_report_path": pdf_path_str,
+                        "pdf_report_url": pdf_url_str,
+                        "vision_source_metadata": vision_source_metadata,
+                        "error_message": update_payload.get("error_message"),
+                    },
+                    "summary_uz": f"Tekshiruv yakunlandi: {summary_data.get('passed', 0)} ta qoida muvofiq, {summary_data.get('failed', 0)} ta qoidabuzarlik.",
+                    "completed_at": completed_at,
+                }
+                supabase.table("compliance_checks").update(comp_payload).eq("id", check_id).execute()
             except Exception as db_err:
-                logger.error(f"Supabase yangilashda xato: {db_err}")
+                logger.error(f"Supabase compliance_checks yangilashda xato: {db_err}")
 
-        if check_id in memory_store["checks"]:
-            memory_store["checks"][check_id].update(update_payload)
+        if check_id in memory_store.get("compliance_checks", {}):
+            memory_store["compliance_checks"][check_id].update(update_payload)
         else:
-            memory_store["checks"][check_id] = {
+            memory_store.setdefault("compliance_checks", {})[check_id] = {
                 "id": check_id,
                 "file_path": file_path,
                 **update_payload,
             }
 
-        logger.info(f"Tekshiruv muvaffaqiyatli yakunlandi [check_id={check_id}]")
+        if check_id in memory_store.get("checks", {}):
+            memory_store["checks"][check_id].update(update_payload)
+        else:
+            memory_store.setdefault("checks", {})[check_id] = {
+                "id": check_id,
+                "file_path": file_path,
+                **update_payload,
+            }
+
+        logger.info(f"Tekshiruv muvaffaqiyatli yakunlandi [check_id={check_id}, status={final_status}]")
         return {
             "check_id": check_id,
-            "status": "completed",
+            "status": final_status,
             "summary": summary_data,
             "results_count": len(results_list),
+            "vision_source_metadata": vision_source_metadata,
         }
 
     except Exception as exc:
@@ -204,11 +291,19 @@ def execute_process_drawing(
         supabase = get_supabase()
         if supabase:
             try:
-                supabase.table("checks").update(error_payload).eq("id", check_id).execute()
-            except Exception:
-                pass
+                err_db_payload = {
+                    "status": "failed",
+                    "compliance_results": {"error_message": str(exc)},
+                    "summary_uz": f"Tekshiruvda xatolik yuz berdi: {str(exc)}",
+                    "completed_at": completed_at,
+                }
+                supabase.table("compliance_checks").update(err_db_payload).eq("id", check_id).execute()
+            except Exception as db_err:
+                logger.error(f"Supabase xatolik holatini yozishda xato: {db_err}")
 
-        if check_id in memory_store["checks"]:
+        if check_id in memory_store.get("compliance_checks", {}):
+            memory_store["compliance_checks"][check_id].update(error_payload)
+        if check_id in memory_store.get("checks", {}):
             memory_store["checks"][check_id].update(error_payload)
 
         raise exc

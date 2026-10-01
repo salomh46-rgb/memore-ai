@@ -15,7 +15,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 
 <p align="center">
-  <strong>Arxitektura, muhandislik va shaharsozlik loyihalarini O'zbekiston qurilish standartlari (QMQ / ShNQ) bo'yicha soniyalar ichida audit qiluvchi, 3D seysmik simulyatsiyali va QR-kodli rasmiy ekspertiza xulosalarini generatsiya qiluvchi avtonom platforma.</strong>
+  <strong>Arxitektura, muhandislik va shaharsozlik loyihalarini O'zbekiston qurilish standartlari (QMQ / ShNQ) bo'yicha soniyalar ichida audit qiluvchi, 3D seysmik simulyatsiyali va QR-kodli texnik ekspertiza xulosalarini generatsiya qiluvchi avtonom platforma.</strong>
 </p>
 
 </div>
@@ -35,11 +35,11 @@
 
 ---
 
-## ⚖️ Rasmiy Yuridik Ogohlantirish (Legal Disclaimer)
+## ⚖️ Yuridik Ogohlantirish (Legal Disclaimer)
 
 > [!IMPORTANT]
 > **Me'morAI** dasturiy ta'minoti arxitektorlar, loyiha institutlari va ekspertlarning ish unumdorligini oshirish, loyihalashdagi qo'pol xatoliklarni erta aniqlash va tekshiruv vaqtini 90% ga qisqartirish uchun mo'ljallangan **texnik yordamchi vositadir**.
-> Tizim xulosalari O'zbekiston Respublikasi qonunchiligiga ko'ra litsenziyalangan bosh loyiha mutaxassisi (GIP/GAP) yoki vakolatli Davlat ekspertiza organining rasmiy yakuniy xulosasini almashtirmaydi. Qurilish va montaj ishlariga ruxsat berish faqatgina sertifikatlangan inson-ekspert imzosi va vazirlik tasdig'i asosida amalga oshiriladi.
+> Tizim xulosalari O'zbekiston Respublikasi qonunchiligiga ko'ra litsenziyalangan bosh loyiha mutaxassisi (GIP/GAP) yoki vakolatli Davlat ekspertiza organining yakuniy xulosasini almashtirmaydi. Qurilish va montaj ishlariga ruxsat berish faqatgina sertifikatlangan inson-ekspert imzosi va vazirlik tasdig'i asosida amalga oshiriladi.
 
 ---
 
@@ -122,9 +122,9 @@ Me'morAI interfeysi 2026-yilgi zamonaviy Dark Neon standartida qurilgan interakt
 
 ---
 
-## 📄 Rasmiy Muhrli PDF Ekspertiza Hisoboti
+## 📄 Texnik Ekspertiza PDF Hisoboti (QR-kodli)
 
-Har bir tekshiruv yakunida tizim quyidagi elementlarga ega rasmiy PDF hisobot tuzadi:
+Har bir tekshiruv yakunida tizim quyidagi elementlarga ega texnik ekspertiza PDF hisobotini tuzadi:
 - **Raqamli QR-Kod:** Onlayn tekshirish va xulosa haqiqiyligini tasdiqlash uchun havola.
 - **Raqamli Ekspert Muhr:** "Me'morAI O'zbekiston QMQ/ShNQ Nazorati — TASDIQLANDI / RAD ETILDI" muhri.
 - **Qoidalar Reestri:** Har bir me'yorning ShNQ moddasi, loyihaning amaldagi qiymati, talab qilingan chegara va tavsiyalar.
@@ -147,7 +147,7 @@ memore-ai/
 │   ├── routers/                 # API endpointlari (/api/checks, /api/projects)
 │   ├── services/
 │   │   ├── dxf_parser.py        # CAD DXF vektorli chizma tahlilchisi (ezdxf)
-│   │   ├── pdf_generator.py     # QR-kodli rasmiy muhrli PDF generatori
+│   │   ├── pdf_generator.py     # QR-kodli texnik ekspertiza PDF generatori
 │   │   └── vision_analyzer.py   # Gemini Multimodal Vision chizma skaneri
 │   └── requirements.txt         # Backend bog'liqliklari
 ├── landing/                     # Next.js 15 Web Workspace & Landing Page

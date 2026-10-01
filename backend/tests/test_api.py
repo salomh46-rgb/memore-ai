@@ -8,6 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.main import app
+from backend.auth import AuthenticatedUser, get_current_user
+
+app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+    user_id="00000000-0000-0000-0000-000000000001",
+    email="test@memore.uz",
+    organization_id=None,
+    role="admin",
+)
 
 client = TestClient(app)
 
@@ -107,7 +115,9 @@ def test_run_check_and_get_result():
     assert check_res.status_code == 200
     report = check_res.json()
     assert report["id"] == check_id
-    assert report["status"] in ["pending", "completed"]
-    if report["status"] == "completed":
+    assert report["status"] in ["pending", "completed", "requires_review"]
+    if report["status"] in ["completed", "requires_review"]:
         assert report["summary"] is not None
         assert report["summary"]["total_checks"] > 0
+        assert "vision_source_metadata" in report
+        assert report["vision_source_metadata"]["extraction_source"] == "extraction_failed"

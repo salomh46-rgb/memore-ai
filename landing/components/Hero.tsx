@@ -47,7 +47,7 @@ export default function Hero() {
           </div>
           <div className="flex items-center justify-center gap-2">
             <CheckCircle2 className="text-accent" size={20} />
-            <span>100% aniq</span>
+            <span>Deterministik Tekshiruv</span>
           </div>
         </div>
       </motion.div>

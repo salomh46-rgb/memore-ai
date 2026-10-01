@@ -43,7 +43,7 @@ Berilgan arxitektura chizmasi (reja, floor plan, qirqim yoki bosh reja)ni diqqat
 }
 
 Faqat va faqat JSON obyektini qaytar, hech qanday markdown teglari (```json) yoki ortiqcha so'z yozma.
-Agar biror parametr chizmada aniq ko'rinmasa, me'moriy mutanosiblikka qarab eng yaqin ehtimolli qiymatni kirit va confidence_score ni moslashtir.
+Agar biror parametr chizmada aniq ko'rinmasa yoki mavjud bo'lmasa, uni JSON ga qo'shma, aslo taxminiy yoki uydirma qiymat kiritma.
 """
 
 
@@ -75,22 +75,35 @@ class GeminiVisionAnalyzer:
     async def analyze_drawing_file(self, file_path: Path | str) -> Dict[str, Any]:
         """
         Faylni (PDF yoki rasm) tahlil qilib, o'lcham va parametrlarni qaytaradi.
+        Fail-closed: Agar API ishlamasa yoki fayl topilmasa, soxta qiymatlar qaytarilmaydi.
         """
         path = Path(file_path)
         if not path.exists():
-            logger.warning(f"Fayl topilmadi: {path}. Default parametrlar qaytariladi.")
-            return self._heuristic_fallback(path.name)
+            logger.warning(f"Fayl topilmadi: {path}. Bo'sh fallback qaytariladi.")
+            fallback = self._heuristic_fallback(path.name)
+            fallback["extraction_source"] = "extraction_failed"
+            return fallback
 
         if not self.api_key or not self.client:
-            logger.info("GEMINI_API_KEY topilmadi, arxitektura evristik modeli ishga tushirildi.")
-            return self._heuristic_fallback(path.name)
+            logger.info("GEMINI_API_KEY topilmadi, fail-closed bo'sh fallback ishga tushirildi.")
+            fallback = self._heuristic_fallback(path.name)
+            fallback["extraction_source"] = "extraction_failed"
+            return fallback
 
         # Gemini API orqali skanerlash
         try:
-            return await self._call_gemini_vision(path)
+            parsed_data = await self._call_gemini_vision(path)
+            if isinstance(parsed_data, dict):
+                parsed_data["extraction_source"] = "gemini_vision"
+                return parsed_data
+            fallback = self._heuristic_fallback(path.name)
+            fallback["extraction_source"] = "extraction_failed"
+            return fallback
         except Exception as e:
-            logger.error(f"Gemini Vision tahlilida xatolik yuz berdi: {e}. Evristik modelga o'tilmoqda.")
-            return self._heuristic_fallback(path.name)
+            logger.error(f"Gemini Vision tahlilida xatolik yuz berdi: {e}. Fail-closed fallbackga o'tilmoqda.")
+            fallback = self._heuristic_fallback(path.name)
+            fallback["extraction_source"] = "extraction_failed"
+            return fallback
 
     async def _call_gemini_vision(self, file_path: Path) -> Dict[str, Any]:
         """Google Gemini API ga so'rov yuborish."""
@@ -129,42 +142,9 @@ class GeminiVisionAnalyzer:
         logger.info(f"Gemini Vision tahlili muvaffaqiyatli: {file_path.name}")
         return parsed_data
 
-    def _heuristic_fallback(self, filename: str) -> Dict[str, Any]:
+    def _heuristic_fallback(self, filename: str = "") -> Dict[str, Any]:
         """
-        API ulanmagan yoki sinov holatida professional arxitektura andozasi.
+        Fail-closed fallback: Soxta arxitektura parametrlari butunlay taqiqlangan.
+        API mavjud bo'lmaganda yoki xatolikda bo'sh dict qaytariladi.
         """
-        return {
-            "project_title": f"Avtomatik tahlil qilingan loyiha: {filename}",
-            "building_type": "residential",
-            "city": "Toshkent",
-            "ceiling_height_m": 2.80,
-            "evacuation_door_width_m": 0.95,
-            "evacuation_corridor_width_m": 1.45,
-            "ramp_slope_percent": 8.0,
-            "ramp_width_m": 1.20,
-            "living_room_area_sqm": 18.2,
-            "bedroom_area_sqm": 12.4,
-            "kitchen_area_sqm": 9.1,
-            "internal_corridor_width_m": 1.30,
-            "bathroom_width_m": 1.65,
-            "fire_access_road_width_m": 6.8,
-            "column_min_dimension_mm": 450,
-            "raft_slab_thickness_mm": 700,
-            "antiseismic_joint_width_mm": 60,
-            "greenery_area_percent": 27.5,
-            "open_parking_distance_from_facade_m": 12.0,
-            "setback_from_major_street_redline_m": 7.5,
-            "apartments": 36,
-            "parking_spots": 38,
-            "detected_rooms": [
-                "Mehmonxona (18.2 m²)",
-                "Asosiy yotoqxona (12.4 m²)",
-                "Oshxona (9.1 m²)",
-                "Vanna va sanuzel (4.5 m²)",
-                "Evakuatsiya koridori (B=1.45m)",
-                "Zina katagi (Marsh B=1.25m)"
-            ],
-            "confidence_score": 0.92,
-            "extraction_source": "Gemini Multimodal Vision Engine (QMQ 2.01.03-19 & ShNQ 2.08.01-19)",
-            "notes": "Chizma qirqimlari va rejalaridan devor qalinliklari va toza o'lchamlar avtomatik kalibrlandi."
-        }
+        return {}

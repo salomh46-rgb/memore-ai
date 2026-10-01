@@ -4,6 +4,7 @@ Supabase bilan xavfsiz ulanishni ta'minlaydi.
 Zero-Secret-Leakage: Kalitlar faqat sozlamalardan olinadi.
 Graceful Fallback: Agar supabase-py o'rnatilmagan bo'lsa yoki ulanish sozlanmagan bo'lsa,
 tizim qulab tushmaydi, balki in-memory vaqtinchalik ombor bilan ishlaydi.
+Production muhitida esa DB xatolari jimgina yashirilmasdan, 5xx xatolik bilan ko'tariladi.
 """
 import logging
 from typing import Any, Optional
@@ -25,10 +26,17 @@ except (ImportError, AttributeError):
 _supabase_client: Optional[Client] = None
 
 
+class DatabaseError(Exception):
+    """Ma'lumotlar bazasi bilan ishlashda yuz bergan xatolik."""
+    pass
+
+
 def get_supabase() -> Optional[Client]:
     """
     Supabase klientining yagona nusxasini (singleton) qaytaradi.
-    Agar URL va Kalit kiritilmagan bo'lsa yoki kutubxona bo'lmasa, None qaytaradi.
+    Agar URL va Kalit kiritilmagan bo'lsa yoki kutubxona bo'lmasa,
+    development muhitida None qaytaradi (in-memory fallback).
+    Ulanish xatosi yuz berganda esa DatabaseError ko'taradi.
     """
     global _supabase_client
     if _supabase_client is not None:
@@ -56,11 +64,24 @@ def get_supabase() -> Optional[Client]:
         return _supabase_client
     except Exception as e:
         logger.error(f"Supabase mijozini yaratishda xatolik: {e}")
-        return None
+        raise DatabaseError(f"Supabase mijoziga ulanishda xatolik: {e}") from e
+
+
+def execute_query(query: Any) -> Any:
+    """
+    Supabase so'rovini bajaradi va xatolik yuz berganda jimgina yashirmasdan
+    DatabaseError ko'taradi (natijada 5xx xatolik qaytariladi).
+    """
+    try:
+        return query.execute()
+    except Exception as e:
+        logger.error(f"Ma'lumotlar bazasi so'rovida xatolik yuz berdi: {e}")
+        raise DatabaseError(f"Ma'lumotlar bazasi so'rovida xatolik: {e}") from e
 
 
 # Ishlab chiqish payti uchun xotirada saqlanuvchi vaqtinchalik ombor (In-memory fallback)
 memory_store: dict[str, dict[str, Any]] = {
     "projects": {},
     "checks": {},
+    "compliance_checks": {},
 }

@@ -22,11 +22,11 @@ for p in [str(project_root), str(backend_dir)]:
 
 try:
     from backend.config import get_settings
-    from backend.database import get_supabase
+    from backend.database import DatabaseError, get_supabase
     from backend.routers import checks_router, projects_router
 except (ImportError, ModuleNotFoundError):
     from config import get_settings
-    from database import get_supabase
+    from database import DatabaseError, get_supabase
     from routers import checks_router, projects_router
 
 # Logging sozlamalari
@@ -73,23 +73,48 @@ app = FastAPI(
     ),
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/api/openapi.json",
+    # Production da docs o'chiriladi (xavfsizlik)
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    openapi_url="/api/openapi.json" if settings.ENVIRONMENT != "production" else None,
 )
 
-# CORS sozlamalari
+# CORS sozlamalari — production da faqat aniq domenlar
+allowed_origins = (
+    settings.ALLOWED_ORIGINS
+    if isinstance(settings.ALLOWED_ORIGINS, list)
+    else [settings.ALLOWED_ORIGINS]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS if isinstance(settings.ALLOWED_ORIGINS, list) else [settings.ALLOWED_ORIGINS],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
+
+# Xatoliklar boshqaruvi (5xx qaytarish)
+@app.exception_handler(DatabaseError)
+async def database_error_handler(request, exc: DatabaseError):
+    logger.error(f"Kritik ma'lumotlar bazasi xatoligi: {exc}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": f"Ma'lumotlar bazasi xatoligi yuz berdi: {str(exc)}"},
+    )
 
 # API Routerlarini ulash
 app.include_router(projects_router, prefix="/api/projects", tags=["Projects"])
 app.include_router(checks_router, prefix="/api/checks", tags=["Checks"])
+
+
+@app.get(
+    "/verify/{check_id}",
+    include_in_schema=False,
+)
+async def verify_redirect(check_id: str):
+    """QR-koddan kelgan so'rovni /api/checks/{check_id}/verify ga yo'naltirish."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=f"/api/checks/{check_id}/verify")
 
 
 # Health Check endpoint

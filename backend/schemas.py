@@ -27,6 +27,7 @@ class CheckJobStatus(str, Enum):
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+    REQUIRES_REVIEW = "requires_review"
 
 
 # ─────────────────────────────────────────
@@ -144,6 +145,7 @@ class CheckReport(BaseModel):
     status: CheckJobStatus
     results: List[CheckResult] = Field(default_factory=list)
     summary: Optional[CheckReportSummary] = None
+    vision_source_metadata: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
     created_at: str
     completed_at: Optional[str] = None

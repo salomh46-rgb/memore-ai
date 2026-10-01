@@ -540,7 +540,7 @@ export default function WorkspaceApp() {
                   <h2 className="text-base sm:text-xl font-bold font-mono text-white">
                     {failCount > 0 
                       ? `🔴 DAVLAT EKSPERTIZASIDAN O'TMAYDI (${failCount} TA QOIDABUZARLIK)` 
-                      : "🟢 DAVLAT EKSPERTIZASIGA 100% TAYYOR"}
+                      : "🟢 DAVLAT EKSPERTIZASIGA TO'LIQ TAYYOR"}
                   </h2>
                   <p className="text-xs font-mono text-slate-300 mt-1">
                     {file ? file.name : "Kiritilgan BIM parametrlari"} • {passCount} ta talab bajarildi, {failCount} ta jiddiy xato aniqlandi
@@ -552,10 +552,10 @@ export default function WorkspaceApp() {
                 <button
                   onClick={handleDownloadReport}
                   className="flex-1 sm:flex-none px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500/30 to-blue-600/30 hover:from-cyan-500/40 hover:to-blue-600/40 text-cyan-200 border border-cyan-400/50 font-mono font-bold text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.25)] transition-all"
-                  title="O'zbekiston Davlat Ekspertizasi andozasidagi QR-kodli rasmiy xulosa"
+                  title="ShNQ va QMQ andozasidagi QR-kodli texnik xulosa"
                 >
                   <Download size={16} className="text-cyan-400" />
-                  <span>📄 Rasmiy Muhrli PDF (QR)</span>
+                  <span>📄 Texnik Ekspertiza PDF (QR)</span>
                 </button>
                 <button
                   onClick={() => setResults(null)}
