@@ -63,9 +63,9 @@ services:
     volumes:
       - uploads_data:/app/uploads
     healthcheck:
-      test: ["CMD-SHELL", "ps aux | grep -v grep | grep -q celery || exit 1"]
+      test: ["CMD-SHELL", "celery -A worker inspect ping || exit 1"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
     networks:
       - memore_net
