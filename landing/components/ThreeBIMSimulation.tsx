@@ -3,19 +3,24 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { 
-  Building2, 
-  Wind, 
-  Activity, 
-  Play, 
-  Pause, 
-  RotateCcw, 
-  Layers, 
-  ShieldCheck, 
-  Sliders, 
-  Eye, 
-  Info,
-  Maximize2
+import {
+  Boxes,
+  Sliders,
+  RotateCcw,
+  Flame,
+  Grid,
+  ShieldCheck,
+  ShieldAlert,
+  Wind,
+  Activity,
+  Maximize2,
+  Building,
+  Layers,
+  ChevronDown,
+  ChevronUp,
+  Box,
+  Shapes,
+  Cpu
 } from "lucide-react";
 
 interface ThreeBIMProps {
@@ -24,655 +29,886 @@ interface ThreeBIMProps {
   isScanning?: boolean;
 }
 
+type BuildingShape = "box" | "l-shape" | "cylinder" | "tapered";
+type StructuralSystem = "core-frame" | "tube" | "outrigger" | "frame-only";
+type SimulationMode = "static" | "quake" | "wind";
+
 export default function ThreeBIMSimulation({
-  initialFloors = 16,
+  initialFloors = 20,
   selectedCity = "Toshkent",
   isScanning = false,
 }: ThreeBIMProps) {
-  const mountRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Boshqaruv parametrlari
-  const [core, setCore] = useState<boolean>(true);
-  const [columns, setColumns] = useState<boolean>(true);
-  const [slabs, setSlabs] = useState<boolean>(true);
-  const [foundation, setFoundation] = useState<boolean>(true);
-  const [mode, setMode] = useState<"Static" | "Wind" | "Seismic">("Seismic");
-  const [intensity, setIntensity] = useState<number>(selectedCity === "Toshkent" ? 9.0 : 8.0);
+  // 1. Parametrik Model Sozlamalari
+  const [shape, setShape] = useState<BuildingShape>("box");
   const [floors, setFloors] = useState<number>(initialFloors);
-  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [floorH, setFloorH] = useState<number>(3.3);
+  const [width, setWidth] = useState<number>(24);
+  const [depth, setDepth] = useState<number>(24);
+  const [system, setSystem] = useState<StructuralSystem>("core-frame");
+  const [seismicBall, setSeismicBall] = useState<number>(
+    selectedCity === "Toshkent" || selectedCity === "Samarqand" || selectedCity === "Andijon" ? 9 : 8
+  );
 
-  // Jonli telemetriya hisoblari (HUD)
-  const [displacementMm, setDisplacementMm] = useState<number>(0);
-  const [vibPeriodSec, setVibPeriodSec] = useState<string>("1.44");
-  const [baseLoadMN, setBaseLoadMN] = useState<string>("76.8");
+  // 2. Qatlamlar (Layers)
+  const [layerCore, setLayerCore] = useState<boolean>(true);
+  const [layerColumns, setLayerColumns] = useState<boolean>(true);
+  const [layerSlabs, setLayerSlabs] = useState<boolean>(true);
+  const [layerRaft, setLayerRaft] = useState<boolean>(true);
 
-  // Three.js boshqaruv obyektlari ref
-  const paramsRef = useRef({
-    core: true,
-    columns: true,
-    slabs: true,
-    foundation: true,
-    mode: "Seismic" as "Static" | "Wind" | "Seismic",
-    intensity: 9.0,
-    floors: 16,
-    isPlaying: true,
+  // 3. Vizual Rejimlar
+  const [wireframe, setWireframe] = useState<boolean>(false);
+  const [heatmap, setHeatmap] = useState<boolean>(false);
+  const [simMode, setSimMode] = useState<SimulationMode>("static");
+  const [isPanelCollapsed, setIsPanelCollapsed] = useState<boolean>(false);
+
+  // 4. Telemetriya Hisoblari (QMQ 2.01.03-19)
+  const [totalHeightM, setTotalHeightM] = useState<number>(floors * floorH);
+  const [totalWeightTonnes, setTotalWeightTonnes] = useState<number>(14250);
+  const [periodT1Sec, setPeriodT1Sec] = useState<number>(1.42);
+  const [baseShearKn, setBaseShearKn] = useState<number>(18420);
+  const [driftMm, setDriftMm] = useState<number>(42);
+  const [driftLimitMm, setDriftLimitMm] = useState<number>(132);
+  const [isDriftSafe, setIsDriftSafe] = useState<boolean>(true);
+
+  // Ref obyektlari — Three.js loop tezkor ishlashi uchun
+  const stateRef = useRef({
+    shape,
+    floors,
+    floorH,
+    width,
+    depth,
+    system,
+    seismicBall,
+    layerCore,
+    layerColumns,
+    layerSlabs,
+    layerRaft,
+    wireframe,
+    heatmap,
+    simMode,
+    isScanning,
+    quakeTime: 0,
   });
 
-  // State o'zgarganda refni yangilash
   useEffect(() => {
-    paramsRef.current = {
-      core,
-      columns,
-      slabs,
-      foundation,
-      mode,
-      intensity,
+    stateRef.current = {
+      shape,
       floors,
-      isPlaying,
+      floorH,
+      width,
+      depth,
+      system,
+      seismicBall,
+      layerCore,
+      layerColumns,
+      layerSlabs,
+      layerRaft,
+      wireframe,
+      heatmap,
+      simMode,
+      isScanning,
+      quakeTime: stateRef.current.quakeTime,
     };
-  }, [core, columns, slabs, foundation, mode, intensity, floors, isPlaying]);
+  }, [
+    shape,
+    floors,
+    floorH,
+    width,
+    depth,
+    system,
+    seismicBall,
+    layerCore,
+    layerColumns,
+    layerSlabs,
+    layerRaft,
+    wireframe,
+    heatmap,
+    simMode,
+    isScanning,
+  ]);
 
+  // Three.js Core Handles
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const buildingGroupRef = useRef<THREE.Group | null>(null);
+  const foundationGroupRef = useRef<THREE.Group | null>(null);
+  const floorMeshesRef = useRef<Array<{ group: THREE.Group; floorIndex: number }>>([]);
+  const animFrameIdRef = useRef<number | null>(null);
+
+  // QMQ Telemetriya hisobi funksiyasi
+  const calculateTelemetry = () => {
+    const H = floors * floorH;
+    const areaFactor = shape === "l-shape" ? 0.75 : shape === "cylinder" ? 0.785 : 1.0;
+    const area = width * depth * areaFactor;
+    const weightTonnes = Math.round(area * floors * 0.55);
+
+    let tFactor = 0.08;
+    if (system === "frame-only") tFactor = 0.11;
+    if (system === "outrigger" || system === "tube") tFactor = 0.065;
+    const t1 = parseFloat((tFactor * Math.pow(H, 0.75)).toFixed(2));
+
+    let A = 0;
+    if (seismicBall === 7) A = 0.1;
+    else if (seismicBall === 8) A = 0.2;
+    else if (seismicBall === 9) A = 0.4;
+
+    const beta = Math.min(2.5, Math.max(0.8, 1.2 / Math.max(t1, 0.1)));
+    const kPsi = system === "frame-only" ? 0.35 : 0.25;
+    const baseShear = Math.round(weightTonnes * 9.81 * A * beta * kPsi);
+
+    let driftFactor = 0.00045;
+    if (system === "tube") driftFactor *= 0.6;
+    if (system === "outrigger") driftFactor *= 0.7;
+    if (system === "frame-only") driftFactor *= 1.8;
+
+    const topDrift = Math.round((A * 10 + 0.5) * Math.pow(H, 1.35) * driftFactor * 10);
+    const limit = Math.round((H * 1000) / 500);
+
+    setTotalHeightM(H);
+    setTotalWeightTonnes(weightTonnes);
+    setPeriodT1Sec(t1);
+    setBaseShearKn(baseShear);
+    setDriftMm(topDrift);
+    setDriftLimitMm(limit);
+    setIsDriftSafe(topDrift <= limit);
+  };
+
+  // Rebuild 3D Meshes
+  const rebuild3DStructure = () => {
+    const buildingGroup = buildingGroupRef.current;
+    const foundationGroup = foundationGroupRef.current;
+    const controls = controlsRef.current;
+    if (!buildingGroup || !foundationGroup) return;
+
+    // Tozalash
+    while (buildingGroup.children.length > 0) {
+      const obj = buildingGroup.children[0] as THREE.Mesh;
+      buildingGroup.remove(obj);
+      if (obj.geometry) obj.geometry.dispose();
+    }
+    while (foundationGroup.children.length > 0) {
+      const obj = foundationGroup.children[0] as THREE.Mesh;
+      foundationGroup.remove(obj);
+      if (obj.geometry) obj.geometry.dispose();
+    }
+    floorMeshesRef.current = [];
+
+    const totalH = floors * floorH;
+    if (controls) {
+      controls.target.set(0, totalH * 0.42, 0);
+    }
+
+    // Materiallar
+    const concreteMat = new THREE.MeshStandardMaterial({
+      color: 0xcfd8dc,
+      roughness: 0.5,
+      metalness: 0.15,
+      wireframe: stateRef.current.wireframe,
+    });
+
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x90a4ae,
+      roughness: 0.4,
+      metalness: 0.1,
+      wireframe: stateRef.current.wireframe,
+    });
+
+    const columnMat = new THREE.MeshStandardMaterial({
+      color: 0x64748b,
+      roughness: 0.3,
+      metalness: 0.3,
+      wireframe: stateRef.current.wireframe,
+    });
+
+    // Helper material heatmap generator
+    const getFloorMaterial = (floorIdx: number, baseMat: THREE.Material) => {
+      if (!stateRef.current.heatmap) return baseMat;
+      const stressRatio = 1.0 - floorIdx / floors;
+      const color = new THREE.Color();
+      if (stressRatio < 0.33) {
+        color.lerpColors(new THREE.Color(0x06b6d4), new THREE.Color(0x10b981), stressRatio / 0.33);
+      } else if (stressRatio < 0.66) {
+        color.lerpColors(new THREE.Color(0x10b981), new THREE.Color(0xfbbf24), (stressRatio - 0.33) / 0.33);
+      } else {
+        color.lerpColors(new THREE.Color(0xfbbf24), new THREE.Color(0xef4444), (stressRatio - 0.66) / 0.34);
+      }
+      return new THREE.MeshStandardMaterial({
+        color,
+        roughness: 0.4,
+        metalness: 0.2,
+        wireframe: stateRef.current.wireframe,
+      });
+    };
+
+    // 1. Poydevor Plitasi (Raft Slab)
+    if (stateRef.current.layerRaft) {
+      const raftThick = 2.4;
+      const raftGeo = new THREE.BoxGeometry(width + 4, raftThick, depth + 4);
+      const raftMesh = new THREE.Mesh(raftGeo, concreteMat);
+      raftMesh.position.set(0, -raftThick / 2, 0);
+      raftMesh.receiveShadow = true;
+      raftMesh.castShadow = true;
+      foundationGroup.add(raftMesh);
+    }
+
+    // 2. Qavatma-qavat konstruktiv elementlar
+    const columnSpacing = 6;
+    const coreSizeX = Math.max(6, width * 0.28);
+    const coreSizeZ = Math.max(6, depth * 0.28);
+
+    for (let f = 0; f < floors; f++) {
+      const floorGroup = new THREE.Group();
+      const yBase = f * floorH;
+
+      let scale = 1.0;
+      if (stateRef.current.shape === "tapered") {
+        scale = 1.0 - (f / floors) * 0.38;
+      }
+
+      const curW = width * scale;
+      const curD = depth * scale;
+
+      // A. Plitalar (Slabs)
+      if (stateRef.current.layerSlabs) {
+        let slabMesh: THREE.Object3D;
+        if (stateRef.current.shape === "cylinder") {
+          const slabGeo = new THREE.CylinderGeometry(curW / 2, curW / 2, 0.28, 32);
+          slabMesh = new THREE.Mesh(slabGeo, getFloorMaterial(f, concreteMat));
+          slabMesh.position.y = yBase + floorH;
+        } else if (stateRef.current.shape === "l-shape") {
+          const slabGroup = new THREE.Group();
+          const part1 = new THREE.Mesh(
+            new THREE.BoxGeometry(curW, 0.28, curD * 0.55),
+            getFloorMaterial(f, concreteMat)
+          );
+          part1.position.set(0, yBase + floorH, -curD * 0.225);
+
+          const part2 = new THREE.Mesh(
+            new THREE.BoxGeometry(curW * 0.55, 0.28, curD * 0.45),
+            getFloorMaterial(f, concreteMat)
+          );
+          part2.position.set(-curW * 0.225, yBase + floorH, curD * 0.275);
+
+          slabGroup.add(part1);
+          slabGroup.add(part2);
+          slabMesh = slabGroup;
+        } else {
+          const slabGeo = new THREE.BoxGeometry(curW, 0.28, curD);
+          slabMesh = new THREE.Mesh(slabGeo, getFloorMaterial(f, concreteMat));
+          slabMesh.position.y = yBase + floorH;
+        }
+        slabMesh.castShadow = true;
+        slabMesh.receiveShadow = true;
+        floorGroup.add(slabMesh);
+      }
+
+      // B. Qattiqlik Yadrosi (Shear Core)
+      if (stateRef.current.layerCore && stateRef.current.system !== "frame-only") {
+        const cThick = 0.4;
+        const cMat = getFloorMaterial(f, coreMat);
+
+        const wN = new THREE.Mesh(new THREE.BoxGeometry(coreSizeX * scale, floorH, cThick), cMat);
+        wN.position.set(0, yBase + floorH / 2, (coreSizeZ * scale) / 2);
+
+        const wS = new THREE.Mesh(new THREE.BoxGeometry(coreSizeX * scale, floorH, cThick), cMat);
+        wS.position.set(0, yBase + floorH / 2, -(coreSizeZ * scale) / 2);
+
+        const wE = new THREE.Mesh(new THREE.BoxGeometry(cThick, floorH, coreSizeZ * scale), cMat);
+        wE.position.set((coreSizeX * scale) / 2, yBase + floorH / 2, 0);
+
+        const wW = new THREE.Mesh(new THREE.BoxGeometry(cThick, floorH, coreSizeZ * scale), cMat);
+        wW.position.set(-(coreSizeX * scale) / 2, yBase + floorH / 2, 0);
+
+        wN.castShadow = true;
+        wS.castShadow = true;
+        wE.castShadow = true;
+        wW.castShadow = true;
+
+        floorGroup.add(wN, wS, wE, wW);
+      }
+
+      // C. Ustunlar (Columns)
+      if (stateRef.current.layerColumns) {
+        const colThick = Math.max(0.45, 0.85 - (f / floors) * 0.35);
+        const colGeo = new THREE.BoxGeometry(colThick, floorH, colThick);
+        const colMatInstance = getFloorMaterial(f, columnMat);
+
+        if (stateRef.current.shape === "cylinder") {
+          const rad = curW / 2 - 1.2;
+          const count = stateRef.current.system === "tube" ? 24 : 12;
+          for (let i = 0; i < count; i++) {
+            const ang = (i / count) * Math.PI * 2;
+            const col = new THREE.Mesh(colGeo, colMatInstance);
+            col.position.set(Math.cos(ang) * rad, yBase + floorH / 2, Math.sin(ang) * rad);
+            col.castShadow = true;
+            floorGroup.add(col);
+          }
+        } else {
+          const numX = Math.round(curW / columnSpacing);
+          const numZ = Math.round(curD / columnSpacing);
+          const stepX = curW / numX;
+          const stepZ = curD / numZ;
+
+          for (let ix = 0; ix <= numX; ix++) {
+            for (let iz = 0; iz <= numZ; iz++) {
+              const px = -curW / 2 + ix * stepX;
+              const pz = -curD / 2 + iz * stepZ;
+
+              const isPerimeter = ix === 0 || ix === numX || iz === 0 || iz === numZ;
+              if (stateRef.current.system === "tube" && !isPerimeter) continue;
+
+              if (stateRef.current.layerCore && stateRef.current.system !== "frame-only") {
+                if (
+                  Math.abs(px) < (coreSizeX * scale) / 2 - 0.4 &&
+                  Math.abs(pz) < (coreSizeZ * scale) / 2 - 0.4
+                ) {
+                  continue;
+                }
+              }
+
+              if (stateRef.current.shape === "l-shape" && px > 0 && pz > 0) continue;
+
+              const col = new THREE.Mesh(colGeo, colMatInstance);
+              col.position.set(px, yBase + floorH / 2, pz);
+              col.castShadow = true;
+              floorGroup.add(col);
+            }
+          }
+        }
+      }
+
+      // D. Outrigger Ferma Tizimi (Mid-height va 3/4 balandlikda po'lat fermalar)
+      if (stateRef.current.system === "outrigger") {
+        const isOutriggerStory =
+          f === Math.floor(floors * 0.45) || f === Math.floor(floors * 0.78);
+        if (isOutriggerStory) {
+          const trussMat = new THREE.MeshStandardMaterial({
+            color: 0xf43f5e,
+            metalness: 0.8,
+            roughness: 0.25,
+          });
+          const beamX = new THREE.Mesh(new THREE.BoxGeometry(curW, 1.2, 0.45), trussMat);
+          beamX.position.set(0, yBase + floorH / 2, 0);
+
+          const beamZ = new THREE.Mesh(new THREE.BoxGeometry(0.45, 1.2, curD), trussMat);
+          beamZ.position.set(0, yBase + floorH / 2, 0);
+
+          floorGroup.add(beamX, beamZ);
+        }
+      }
+
+      buildingGroup.add(floorGroup);
+      floorMeshesRef.current.push({ group: floorGroup, floorIndex: f });
+    }
+  };
+
+  // Three.js Initsializatsiyasi
   useEffect(() => {
-    const container = mountRef.current;
+    const container = containerRef.current;
     if (!container) return;
 
-    let width = container.clientWidth || 800;
-    let height = container.clientHeight || 460;
+    const widthPx = container.clientWidth || 800;
+    const heightPx = container.clientHeight || 560;
 
-    // 1. Scene, Camera, Renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x030712); // Deep obsidian background
+    scene.background = new THREE.Color(0x030712);
+    scene.fog = new THREE.FogExp2(0x030712, 0.007);
+    sceneRef.current = scene;
 
-    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 1000);
-    const initialH = paramsRef.current.floors * 2.5;
-    camera.position.set(48, initialH * 0.75 + 12, 58);
+    const camera = new THREE.PerspectiveCamera(45, widthPx / heightPx, 1, 1000);
+    camera.position.set(65, 55, 75);
+    cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
-    renderer.setSize(width, height);
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: "high-performance",
+    });
+    renderer.setSize(widthPx, heightPx);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.innerHTML = "";
     container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI / 2 + 0.05; // Yer ostiga tushib ketmaslik
-    controls.minDistance = 15;
-    controls.maxDistance = 160;
+    controls.dampingFactor = 0.06;
+    controls.maxPolarAngle = Math.PI / 2 - 0.02;
+    controls.target.set(0, 25, 0);
+    controlsRef.current = controls;
 
-    // 2. Chiroqlar (Lighting - Neon & Professional Studio)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
-    scene.add(ambientLight);
+    // Yoritish tizimi
+    const ambient = new THREE.AmbientLight(0xdbeafe, 0.65);
+    scene.add(ambient);
 
-    const dirLight1 = new THREE.DirectionalLight(0x38bdf8, 1.2); // Tsian asosiy nur
-    dirLight1.position.set(40, 70, 45);
-    dirLight1.castShadow = true;
-    dirLight1.shadow.mapSize.width = 1024;
-    dirLight1.shadow.mapSize.height = 1024;
-    scene.add(dirLight1);
+    const sun = new THREE.DirectionalLight(0xffffff, 0.95);
+    sun.position.set(70, 120, 60);
+    sun.castShadow = true;
+    sun.shadow.mapSize.width = 2048;
+    sun.shadow.mapSize.height = 2048;
+    scene.add(sun);
 
-    const dirLight2 = new THREE.DirectionalLight(0x0284c7, 0.6); // Chuqur ko'k to'ldiruvchi nur
-    dirLight2.position.set(-40, 25, -35);
-    scene.add(dirLight2);
+    const blueRim = new THREE.DirectionalLight(0x06b6d4, 0.6);
+    blueRim.position.set(-60, 40, -60);
+    scene.add(blueRim);
 
-    // 3. Grunt va Seysmik To'r (Ground Grid)
-    const gridColor = new THREE.Color(0x1e293b);
-    const gridCenterColor = new THREE.Color(0x0284c7);
-    const grid = new THREE.GridHelper(90, 45, gridCenterColor, gridColor);
-    grid.position.y = -1.2;
+    // Zamin va muhandislik koordinata to'ri
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(320, 320),
+      new THREE.MeshStandardMaterial({ color: 0x050914, roughness: 0.9, metalness: 0.1 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -0.05;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    const grid = new THREE.GridHelper(160, 40, 0x06b6d4, 0x1e293b);
+    grid.position.y = 0;
     scene.add(grid);
 
-    // 4. Binoni qurish mantiqi
-    const buildingGroup = new THREE.Group();
-    scene.add(buildingGroup);
+    // Asosiy guruhlar
+    const bGroup = new THREE.Group();
+    scene.add(bGroup);
+    buildingGroupRef.current = bGroup;
 
-    let floorNodes: any[] = [];
-    let foundationMesh: THREE.Mesh | null = null;
-    let currentFloorsCount = 0;
+    const fGroup = new THREE.Group();
+    scene.add(fGroup);
+    foundationGroupRef.current = fGroup;
 
-    const coreGeo = new THREE.BoxGeometry(8, 2.5, 8);
-    const colGeo = new THREE.BoxGeometry(0.75, 2.5, 0.75);
-    const slabGeo = new THREE.BoxGeometry(20, 0.28, 20);
-    const fndGeo = new THREE.BoxGeometry(25, 1.4, 25);
+    // Birinchi qurilish
+    rebuild3DStructure();
+    calculateTelemetry();
 
-    const coreEdgeGeo = new THREE.EdgesGeometry(coreGeo);
-    const colEdgeGeo = new THREE.EdgesGeometry(colGeo);
-    const slabEdgeGeo = new THREE.EdgesGeometry(slabGeo);
-    const fndEdgeGeo = new THREE.EdgesGeometry(fndGeo);
+    // Resize tinglovchi
+    const handleResize = () => {
+      if (!containerRef.current || !cameraRef.current || !rendererRef.current) return;
+      const w = containerRef.current.clientWidth;
+      const h = containerRef.current.clientHeight;
+      cameraRef.current.aspect = w / h;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(w, h);
+    };
+    window.addEventListener("resize", handleResize);
 
-    function getStressColor(ratio: number) {
-      const r = Math.min(1.0, Math.max(0.0, ratio));
-      const c = new THREE.Color();
-      if (r < 0.33) {
-        c.lerpColors(new THREE.Color(0x0284c7), new THREE.Color(0x06b6d4), r / 0.33);
-      } else if (r < 0.66) {
-        c.lerpColors(new THREE.Color(0x06b6d4), new THREE.Color(0xf59e0b), (r - 0.33) / 0.33);
-      } else {
-        c.lerpColors(new THREE.Color(0xf59e0b), new THREE.Color(0xef4444), (r - 0.66) / 0.34);
-      }
-      return c;
-    }
-
-    function buildBuilding(numFloors: number) {
-      // Eskilarni tozalash
-      while (buildingGroup.children.length > 0) {
-        const child = buildingGroup.children[0];
-        buildingGroup.remove(child);
-      }
-      floorNodes = [];
-
-      // Poydevor (Foundation / Raft Slab)
-      const fndMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0x1e293b),
-        roughness: 0.6,
-        metalness: 0.2,
-      });
-      foundationMesh = new THREE.Mesh(fndGeo, fndMat);
-      foundationMesh.position.y = -0.7;
-      foundationMesh.receiveShadow = true;
-
-      const fndLine = new THREE.LineSegments(
-        fndEdgeGeo,
-        new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 })
-      );
-      foundationMesh.add(fndLine);
-      buildingGroup.add(foundationMesh);
-
-      const h = 2.5;
-
-      for (let i = 0; i < numFloors; i++) {
-        const floorGroup = new THREE.Group();
-        const yCenter = i * h + h / 2;
-        floorGroup.position.set(0, yCenter, 0);
-
-        const stressRatio = (numFloors - i) / numFloors;
-        const baseColor = getStressColor(stressRatio);
-
-        // A. Markaziy Monolit Yadro (Core / Lift Shaxtasi)
-        const coreMat = new THREE.MeshStandardMaterial({
-          color: baseColor.clone(),
-          roughness: 0.35,
-          metalness: 0.15,
-          transparent: true,
-          opacity: 0.92,
-        });
-        const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-        coreMesh.castShadow = true;
-        coreMesh.receiveShadow = true;
-
-        const coreLine = new THREE.LineSegments(
-          coreEdgeGeo,
-          new THREE.LineBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.6 })
-        );
-        coreMesh.add(coreLine);
-        floorGroup.add(coreMesh);
-
-        // B. Perimetr Ustunlari (8 ta karkas ustuni)
-        const columnMeshes: THREE.Mesh[] = [];
-        const colMat = new THREE.MeshStandardMaterial({
-          color: baseColor.clone(),
-          roughness: 0.25,
-          metalness: 0.3,
-        });
-
-        const colOffsets = [
-          [-8.5, -8.5], [0, -8.5], [8.5, -8.5],
-          [-8.5, 0],               [8.5, 0],
-          [-8.5, 8.5],  [0, 8.5],  [8.5, 8.5],
-        ];
-
-        colOffsets.forEach(([cx, cz]) => {
-          const colMesh = new THREE.Mesh(colGeo, colMat);
-          colMesh.position.set(cx, 0, cz);
-          colMesh.castShadow = true;
-          colMesh.receiveShadow = true;
-
-          const colLine = new THREE.LineSegments(
-            colEdgeGeo,
-            new THREE.LineBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.4 })
-          );
-          colMesh.add(colLine);
-          floorGroup.add(colMesh);
-          columnMeshes.push(colMesh);
-        });
-
-        // C. Qavatlararo Monolit Plita (Slab)
-        const slabMat = new THREE.MeshStandardMaterial({
-          color: baseColor.clone().lerp(new THREE.Color(0xffffff), 0.4),
-          roughness: 0.2,
-          metalness: 0.1,
-          transparent: true,
-          opacity: 0.82,
-        });
-        const slabMesh = new THREE.Mesh(slabGeo, slabMat);
-        slabMesh.position.set(0, h / 2 - 0.14, 0);
-        slabMesh.receiveShadow = true;
-
-        const slabLine = new THREE.LineSegments(
-          slabEdgeGeo,
-          new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.4 })
-        );
-        slabMesh.add(slabLine);
-        floorGroup.add(slabMesh);
-
-        buildingGroup.add(floorGroup);
-
-        floorNodes.push({
-          group: floorGroup,
-          level: i,
-          baseY: yCenter,
-          coreMesh,
-          coreMat,
-          columnMeshes,
-          colMat,
-          slabMesh,
-          slabMat,
-          baseStressRatio: stressRatio,
-        });
-      }
-
-      currentFloorsCount = numFloors;
-      controls.target.set(0, (numFloors * h) / 2, 0);
-    }
-
-    buildBuilding(paramsRef.current.floors);
-
-    // 5. Animatsiya va Fizik Tebranish Sikli (RAF)
-    let animationFrameId: number;
-    let simTime = 0;
-    let lastTime = performance.now();
-
+    // Animatsiya tsikli
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
+      animFrameIdRef.current = requestAnimationFrame(animate);
 
-      const now = performance.now();
-      const dt = Math.min((now - lastTime) / 1000, 0.1);
-      lastTime = now;
+      const state = stateRef.current;
+      const floorMeshes = floorMeshesRef.current;
 
-      const p = paramsRef.current;
+      if (state.simMode === "quake" && state.seismicBall > 0) {
+        state.quakeTime += 0.055;
+        const amplitude = state.seismicBall * 0.12;
 
-      // Qavatlar soni o'zgarsa qayta qurish
-      if (p.floors !== currentFloorsCount) {
-        buildBuilding(p.floors);
-      }
+        floorMeshes.forEach((item) => {
+          const normalizedH = item.floorIndex / Math.max(state.floors, 1);
+          const swayX =
+            Math.sin(state.quakeTime * 2.5) * Math.pow(normalizedH, 1.8) * amplitude * 2.8;
+          const swayZ =
+            Math.cos(state.quakeTime * 1.8) * Math.pow(normalizedH, 2.0) * (amplitude * 1.2);
 
-      // Qatlamlar ko'rinishi
-      if (foundationMesh) foundationMesh.visible = p.foundation;
-      floorNodes.forEach((node) => {
-        if (node.coreMesh) node.coreMesh.visible = p.core;
-        if (node.columnMeshes) node.columnMeshes.forEach((m: THREE.Mesh) => (m.visible = p.columns));
-        if (node.slabMesh) node.slabMesh.visible = p.slabs;
-      });
+          item.group.position.x = swayX;
+          item.group.position.z = swayZ;
+          item.group.rotation.z = -swayX * 0.008;
+          item.group.rotation.x = swayZ * 0.008;
+        });
+      } else if (state.simMode === "wind") {
+        state.quakeTime += 0.03;
+        const gust = Math.sin(state.quakeTime * 4.0) * 0.35 + 1.0;
 
-      if (p.isPlaying || p.mode !== "Static") {
-        simTime += dt * 1.6;
-      }
-
-      const numFloors = p.floors;
-      const h = 2.5;
-      const H = numFloors * h;
-
-      let targetAmp = 0;
-      if (p.mode === "Wind") {
-        targetAmp = 0.85;
-      } else if (p.mode === "Seismic") {
-        const intensityFactor = Math.pow(1.7, p.intensity - 7);
-        targetAmp = 0.65 * intensityFactor;
-      }
-
-      let swayXTop = 0;
-      let swayZTop = 0;
-
-      // Har bir qavatning deformatsiyasi va tebranish to'lqini
-      floorNodes.forEach((node, idx) => {
-        const levelY = (node.level + 1) * h;
-        const r = levelY / H;
-
-        let dx = 0;
-        let dz = 0;
-
-        if (p.mode === "Wind") {
-          const windPhase = simTime * 2.2;
-          dx = targetAmp * Math.pow(r, 1.8) * (Math.sin(windPhase) + 0.25 * Math.sin(windPhase * 2.4));
-          dz = 0.25 * targetAmp * Math.pow(r, 1.8) * Math.cos(windPhase * 1.5);
-        } else if (p.mode === "Seismic") {
-          const seismicPhase = simTime * 4.8;
-          const groundMotion = Math.sin(seismicPhase * 2.2) * 0.12;
-          dx =
-            targetAmp *
-              (Math.pow(r, 2.0) * Math.sin(seismicPhase) +
-                0.22 * Math.pow(r, 3.0) * Math.sin(seismicPhase * 2.2)) +
-            groundMotion;
-          dz =
-            0.3 *
-            targetAmp *
-            (Math.pow(r, 2.0) * Math.cos(seismicPhase * 1.4) +
-              0.15 * Math.sin(seismicPhase * 2.8));
-        }
-
-        const rotZ = (-1.8 * dx) / H;
-        const rotX = (1.8 * dz) / H;
-
-        node.group.position.x = dx;
-        node.group.position.z = dz;
-        node.group.rotation.z = rotZ;
-        node.group.rotation.x = rotX;
-
-        if (idx === floorNodes.length - 1) {
-          swayXTop = dx;
-          swayZTop = dz;
-        }
-
-        // Stress Heatmap: egilish va yuklama bo'yicha rang o'zgarishi
-        const bendingEnvelope = Math.pow(1.0 - r * 0.8, 2.0);
-        const dynamicBoost = (Math.hypot(dx, dz) / (targetAmp || 1)) * 0.35 * bendingEnvelope;
-        const effectiveStress = Math.min(1.0, node.baseStressRatio + dynamicBoost);
-
-        const stressColor = getStressColor(effectiveStress);
-        node.coreMat.color.copy(stressColor);
-        node.colMat.color.copy(stressColor);
-        node.slabMat.color.copy(stressColor).lerp(new THREE.Color(0xffffff), 0.35);
-      });
-
-      // Zamin tebranishi (Ground motion)
-      if (foundationMesh) {
-        if (p.mode === "Seismic" && p.isPlaying) {
-          foundationMesh.position.x = Math.sin(simTime * 9.5) * 0.08 * (p.intensity - 6);
-          foundationMesh.position.z = Math.cos(simTime * 8.5) * 0.05 * (p.intensity - 6);
-        } else {
-          foundationMesh.position.x = 0;
-          foundationMesh.position.z = 0;
-        }
+        floorMeshes.forEach((item) => {
+          const normalizedH = item.floorIndex / Math.max(state.floors, 1);
+          const deflX = Math.pow(normalizedH, 1.9) * 2.2 * gust;
+          item.group.position.x = deflX;
+          item.group.position.z = 0;
+          item.group.rotation.z = -deflX * 0.007;
+          item.group.rotation.x = 0;
+        });
+      } else {
+        floorMeshes.forEach((item) => {
+          item.group.position.lerp(new THREE.Vector3(0, 0, 0), 0.1);
+          item.group.rotation.z *= 0.85;
+          item.group.rotation.x *= 0.85;
+        });
       }
 
       controls.update();
       renderer.render(scene, camera);
-
-      // Telemetriyani hisoblash (Top displacement, period, axial load)
-      const topDisp = Math.round(Math.hypot(swayXTop, swayZTop) * 1000);
-      const vibPeriod = (0.09 * numFloors).toFixed(2);
-      const baseLoad = ((numFloors * 20 * 20 * 12) / 1000).toFixed(1);
-
-      setDisplacementMm(topDisp);
-      setVibPeriodSec(vibPeriod);
-      setBaseLoadMN(baseLoad);
     };
 
     animate();
 
-    // 6. Resize kuzatuvchisi
-    const handleResize = () => {
-      if (!container) return;
-      width = container.clientWidth;
-      height = container.clientHeight;
-      camera.aspect = width / height;
-      camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
-    };
-    window.addEventListener("resize", handleResize);
-
     return () => {
-      cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
       renderer.dispose();
-      controls.dispose();
-      if (container) container.innerHTML = "";
+      container.innerHTML = "";
     };
   }, []);
 
+  // Parametrlar o'zgarganda qayta qurish
+  useEffect(() => {
+    rebuild3DStructure();
+    calculateTelemetry();
+  }, [shape, floors, floorH, width, depth, system, layerCore, layerColumns, layerSlabs, layerRaft, wireframe, heatmap, seismicBall]);
+
   return (
-    <div className="w-full bg-[#050608]/90 border border-cyan-500/25 rounded-3xl p-4 sm:p-6 shadow-[0_0_50px_rgba(2,132,199,0.15)] relative overflow-hidden backdrop-blur-xl">
-      {/* 1. Sarlavha va Rejim Boshqaruvi */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4 pb-4 border-b border-white/10">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">
-              <Building2 size={20} />
+    <div className="relative w-full h-[580px] sm:h-[620px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-[#030712] shadow-[0_0_50px_rgba(6,182,212,0.1)]">
+      {/* 3D WebGL Canvas */}
+      <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" />
+
+      {/* Yuqori Panel (Header Toolbar) */}
+      <header className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2.5 pointer-events-none">
+        <div className="backdrop-blur-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 rounded-2xl flex items-center gap-3 pointer-events-auto shadow-xl">
+          <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400">
+            <Boxes size={18} />
+          </div>
+          <div>
+            <h2 className="text-xs sm:text-sm font-bold font-mono tracking-tight text-white flex items-center gap-2">
+              STRUKTURA 3D BIM <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">QMQ 2.01.03-19</span>
+            </h2>
+            <p className="text-[10px] text-slate-400 font-mono">Parametrik bino konstruksiyasi va seysmik tahlili</p>
+          </div>
+        </div>
+
+        {/* Tezkor Tugmalar */}
+        <div className="backdrop-blur-xl bg-slate-900/80 border border-white/10 px-2.5 py-1.5 rounded-2xl flex items-center gap-1.5 pointer-events-auto shadow-xl">
+          <button
+            onClick={() => {
+              if (cameraRef.current && controlsRef.current) {
+                cameraRef.current.position.set(65, 55, 75);
+                controlsRef.current.target.set(0, (floors * floorH) * 0.42, 0);
+              }
+            }}
+            title="Kamerani tiklash"
+            className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-medium flex items-center gap-1.5 transition-all"
+          >
+            <RotateCcw size={14} className="text-cyan-400" />
+            <span className="hidden sm:inline">Kamera</span>
+          </button>
+          <button
+            onClick={() => setWireframe(!wireframe)}
+            title="Simli karkas rejimi"
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+              wireframe ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+            }`}
+          >
+            <Grid size={14} className="text-amber-400" />
+            <span className="hidden sm:inline">Wireframe</span>
+          </button>
+          <button
+            onClick={() => setHeatmap(!heatmap)}
+            title="Zo'riqish gradiyenti (Stress Heatmap)"
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+              heatmap ? "bg-rose-500/25 text-rose-300 border border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
+            }`}
+          >
+            <Flame size={14} className="text-rose-400" />
+            <span>Heatmap: {heatmap ? "ON" : "OFF"}</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Chap Sozlamalar Paneli (Configurator) */}
+      <aside className={`absolute top-16 left-3 bottom-3 z-10 backdrop-blur-xl bg-slate-950/85 border border-white/10 rounded-2xl flex flex-col pointer-events-auto transition-all duration-300 overflow-hidden shadow-2xl ${
+        isPanelCollapsed ? "w-12" : "w-72 sm:w-80"
+      }`}>
+        <div className="px-3.5 py-2.5 border-b border-white/10 flex justify-between items-center bg-slate-900/60">
+          {!isPanelCollapsed && (
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2 font-mono">
+              <Sliders size={14} /> Parametrik Sozlash
             </span>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold font-mono text-white flex items-center gap-2">
-                <span>HIGH-RISE 3D STRUCTURAL INTEGRITY SIMULATION</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
-                  QMQ 2.01.03-19
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400 font-mono">
-                Haqiqiy WebGL 3D seysmik tebranish, karkas yuki va elastik deformatsiya modeli
-              </p>
+          )}
+          <button
+            onClick={() => setIsPanelCollapsed(!isPanelCollapsed)}
+            className="text-slate-400 hover:text-white p-1 rounded-lg"
+            title={isPanelCollapsed ? "Panelni ochish" : "Panelni yashirish"}
+          >
+            {isPanelCollapsed ? <Sliders size={16} className="text-cyan-400" /> : <ChevronDown size={16} />}
+          </button>
+        </div>
+
+        {!isPanelCollapsed && (
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 text-xs font-mono">
+            {/* 1. Me'moriy Shakl */}
+            <div className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-white/5">
+              <label className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
+                <span>ARXITEKTURA SHAKLI</span>
+                <Shapes size={12} className="text-cyan-400" />
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(
+                  [
+                    ["box", "To'g'ri burchakli"],
+                    ["l-shape", "L-Shaklli"],
+                    ["cylinder", "Silindrsimon"],
+                    ["tapered", "Torayuvchi"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setShape(key)}
+                    className={`px-2 py-1.5 rounded-lg font-medium text-[11px] text-center transition-all ${
+                      shape === key
+                        ? "bg-cyan-600 text-white font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]"
+                        : "bg-slate-800/80 hover:bg-slate-700 text-slate-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
 
-        {/* Yuklama Ssenariysi (Mode: Static, Wind, Seismic) */}
-        <div className="flex items-center gap-1.5 p-1 bg-black/60 border border-white/10 rounded-2xl w-full sm:w-auto overflow-x-auto">
-          <button
-            onClick={() => setMode("Static")}
-            className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all flex items-center justify-center gap-1.5 ${
-              mode === "Static"
-                ? "bg-cyan-500 text-black shadow-[0_0_15px_#06b6d4]"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Activity size={14} />
-            <span>Statik</span>
-          </button>
+            {/* 2. O'lchamlar va Qavatlar */}
+            <div className="space-y-2.5 bg-slate-900/40 p-2.5 rounded-xl border border-white/5">
+              <span className="text-[10px] font-bold text-slate-400 block">QAVAT VA GABARITLAR</span>
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1 text-[11px]">
+                  <span>Qavatlar soni:</span>
+                  <span className="font-bold text-cyan-400">{floors} qavat</span>
+                </div>
+                <input
+                  type="range"
+                  min="5"
+                  max="45"
+                  value={floors}
+                  onChange={(e) => setFloors(parseInt(e.target.value))}
+                  className="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer accent-cyan-500"
+                />
+              </div>
 
-          <button
-            onClick={() => setMode("Wind")}
-            className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all flex items-center justify-center gap-1.5 ${
-              mode === "Wind"
-                ? "bg-cyan-500 text-black shadow-[0_0_15px_#06b6d4]"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Wind size={14} />
-            <span>Shamol</span>
-          </button>
+              <div>
+                <div className="flex justify-between text-slate-300 mb-1 text-[11px]">
+                  <span>Qavat balandligi:</span>
+                  <span className="font-bold text-cyan-400">{floorH.toFixed(1)} m</span>
+                </div>
+                <input
+                  type="range"
+                  min="3.0"
+                  max="4.5"
+                  step="0.1"
+                  value={floorH}
+                  onChange={(e) => setFloorH(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer accent-cyan-500"
+                />
+              </div>
 
-          <button
-            onClick={() => setMode("Seismic")}
-            className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-mono font-semibold transition-all flex items-center justify-center gap-1.5 ${
-              mode === "Seismic"
-                ? "bg-gradient-to-r from-amber-500 to-rose-500 text-black font-bold shadow-[0_0_20px_rgba(245,158,11,0.5)]"
-                : "text-slate-400 hover:text-white"
-            }`}
-          >
-            <Activity size={14} />
-            <span>Seysmik ({intensity} ball)</span>
-          </button>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="flex justify-between text-slate-300 mb-1 text-[10px]">
+                    <span>Kenglik (X):</span>
+                    <span className="text-cyan-400 font-bold">{width}m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="16"
+                    max="48"
+                    step="4"
+                    value={width}
+                    onChange={(e) => setWidth(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer accent-cyan-500"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-slate-300 mb-1 text-[10px]">
+                    <span>Uzunlik (Z):</span>
+                    <span className="text-cyan-400 font-bold">{depth}m</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="16"
+                    max="48"
+                    step="4"
+                    value={depth}
+                    onChange={(e) => setDepth(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer accent-cyan-500"
+                  />
+                </div>
+              </div>
+            </div>
 
-          <button
-            onClick={() => setIsPlaying(!isPlaying)}
-            className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all ml-1"
-            title={isPlaying ? "To'xtatish" : "Davom ettirish"}
-          >
-            {isPlaying ? <Pause size={15} /> : <Play size={15} />}
-          </button>
-        </div>
-      </div>
+            {/* 3. Konstruktiv Tizim */}
+            <div className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-white/5">
+              <label className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
+                <span>KONSTRUKTIV TIZIM</span>
+                <Cpu size={12} className="text-cyan-400" />
+              </label>
+              <select
+                value={system}
+                onChange={(e) => setSystem(e.target.value as StructuralSystem)}
+                className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-[11px] rounded-lg p-2 focus:ring-1 focus:ring-cyan-500 focus:outline-none font-mono"
+              >
+                <option value="core-frame">Karkas-Diafragma (Core + Frame)</option>
+                <option value="tube">Trubasimon (Tube-in-Tube)</option>
+                <option value="outrigger">Outrigger Ferma Tizimi</option>
+                <option value="frame-only">Oddiy Ramali Karkas</option>
+              </select>
+            </div>
 
-      {/* 2. REAL-TIME TELEMETRIYA HUD BAR */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div className="bg-black/50 border border-cyan-500/20 rounded-2xl p-3">
-          <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block">
-            Top Displacement
-          </span>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-cyan-400">
-              {displacementMm}
-            </span>
-            <span className="text-xs font-mono text-slate-500">mm</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono">
-            Limit: ≤ {Math.round((floors * 2.5 * 1000) / 500)} mm (H/500)
-          </span>
-        </div>
+            {/* 4. Konstruktiv Qatlamlar */}
+            <div className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-white/5">
+              <span className="text-[10px] font-bold text-slate-400 block mb-1">QATLAMLARNI BOSHQARISH</span>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={layerCore}
+                    onChange={(e) => setLayerCore(e.target.checked)}
+                    className="rounded bg-slate-800 border-slate-700 text-cyan-600 focus:ring-0"
+                  />
+                  <span>Yadro (Core)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={layerColumns}
+                    onChange={(e) => setLayerColumns(e.target.checked)}
+                    className="rounded bg-slate-800 border-slate-700 text-cyan-600 focus:ring-0"
+                  />
+                  <span>Ustunlar</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={layerSlabs}
+                    onChange={(e) => setLayerSlabs(e.target.checked)}
+                    className="rounded bg-slate-800 border-slate-700 text-cyan-600 focus:ring-0"
+                  />
+                  <span>Plitalar</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={layerRaft}
+                    onChange={(e) => setLayerRaft(e.target.checked)}
+                    className="rounded bg-slate-800 border-slate-700 text-cyan-600 focus:ring-0"
+                  />
+                  <span>Poydevor</span>
+                </label>
+              </div>
+            </div>
 
-        <div className="bg-black/50 border border-cyan-500/20 rounded-2xl p-3">
-          <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block">
-            Vibration Period (T)
-          </span>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-amber-400">
-              {vibPeriodSec}
-            </span>
-            <span className="text-xs font-mono text-slate-500">soniya</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono">
-            T ≈ 0.09 · {floors} qavat
-          </span>
-        </div>
-
-        <div className="bg-black/50 border border-cyan-500/20 rounded-2xl p-3">
-          <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block">
-            Base Axial Load
-          </span>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-xl sm:text-2xl font-bold font-mono text-emerald-400">
-              {baseLoadMN}
-            </span>
-            <span className="text-xs font-mono text-slate-500">MN</span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono">
-            Raft Slab yuk taqsimoti
-          </span>
-        </div>
-
-        <div className="bg-black/50 border border-cyan-500/20 rounded-2xl p-3">
-          <span className="text-[11px] font-mono text-slate-400 uppercase tracking-wider block">
-            Seysmik Xavfsizlik
-          </span>
-          <div className="flex items-baseline gap-1 mt-1">
-            <span className={`text-sm sm:text-base font-bold font-mono ${
-              displacementMm < (floors * 2.5 * 1000) / 500 ? "text-emerald-400" : "text-rose-400"
-            }`}>
-              {displacementMm < (floors * 2.5 * 1000) / 500 ? "✅ TALABGA MOS" : "⚠️ CHEGARADAN OSHDI"}
-            </span>
-          </div>
-          <span className="text-[10px] text-slate-400 font-mono">
-            {selectedCity} (MSK-64: {intensity} ball)
-          </span>
-        </div>
-      </div>
-
-      {/* 3. 3D WebGL Canvas Qutisi */}
-      <div className="relative w-full h-[400px] sm:h-[480px] rounded-2xl overflow-hidden border border-white/10 bg-[#030712] shadow-inner">
-        {/* Three.js DOM render konteyneri */}
-        <div ref={mountRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
-
-        {/* 3D Kursor ko'rsatmasi */}
-        <div className="absolute top-3 left-3 pointer-events-none bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/10 text-[11px] font-mono text-slate-300 flex items-center gap-2">
-          <Maximize2 size={13} className="text-cyan-400" />
-          <span>Sichqoncha / barmoq bilan 360° aylantiring va yaqinlashtiring</span>
-        </div>
-
-        {/* Stress Gradient Legend */}
-        <div className="absolute bottom-3 right-3 pointer-events-none bg-black/70 backdrop-blur-md p-2.5 rounded-xl border border-white/10 text-[10px] font-mono space-y-1">
-          <span className="text-slate-400 block font-bold">KARKAS ZO'RIQISHI (STRESS):</span>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded bg-cyan-500 inline-block" />
-            <span className="text-slate-300">Kam yuk (0.3)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded bg-amber-500 inline-block" />
-            <span className="text-slate-300">O'rtacha (0.6)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-3 h-2 rounded bg-rose-500 inline-block" />
-            <span className="text-slate-300">Maksimal (0.9+)</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. Interaktiv Konstruksiya Qatlamlari va Slayderlar */}
-      <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
-        {/* Qatlamlar (Toggles) */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-mono text-slate-400 mr-1 flex items-center gap-1">
-            <Layers size={14} className="text-cyan-400" />
-            <span>Qatlamlar:</span>
-          </span>
-
-          <button
-            onClick={() => setCore(!core)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
-              core
-                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                : "bg-white/5 text-slate-500 border-white/5 hover:text-slate-300"
-            }`}
-          >
-            🏢 Yadro (Core)
-          </button>
-
-          <button
-            onClick={() => setColumns(!columns)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
-              columns
-                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                : "bg-white/5 text-slate-500 border-white/5 hover:text-slate-300"
-            }`}
-          >
-            🏛️ Ustunlar (Columns)
-          </button>
-
-          <button
-            onClick={() => setSlabs(!slabs)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
-              slabs
-                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                : "bg-white/5 text-slate-500 border-white/5 hover:text-slate-300"
-            }`}
-          >
-            🔲 Plitalar (Slabs)
-          </button>
-
-          <button
-            onClick={() => setFoundation(!foundation)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono transition-all border ${
-              foundation
-                ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/40"
-                : "bg-white/5 text-slate-500 border-white/5 hover:text-slate-300"
-            }`}
-          >
-            🧱 Poydevor (Raft)
-          </button>
-        </div>
-
-        {/* Qavatlar va Seysmik Ball Slayderlari */}
-        <div className="flex items-center gap-5 w-full sm:w-auto">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-slate-400">Qavatlar:</span>
-            <input
-              type="range"
-              min="10"
-              max="30"
-              step="1"
-              value={floors}
-              onChange={(e) => setFloors(parseInt(e.target.value))}
-              className="w-24 sm:w-32 accent-cyan-400 cursor-pointer"
-            />
-            <span className="text-xs font-bold font-mono text-cyan-400 w-6">{floors}</span>
-          </div>
-
-          {mode === "Seismic" && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono text-slate-400">Ball:</span>
+            {/* 5. Dinamik Yuklama & Zilzila */}
+            <div className="space-y-2 bg-slate-900/40 p-2.5 rounded-xl border border-white/5">
+              <div className="flex justify-between text-slate-300 text-[11px]">
+                <span>Seysmiklik:</span>
+                <span className="font-bold text-rose-400">{seismicBall} Ball (A={seismicBall === 9 ? "0.4g" : seismicBall === 8 ? "0.2g" : "0.1g"})</span>
+              </div>
               <input
                 type="range"
                 min="7"
                 max="9"
-                step="0.1"
-                value={intensity}
-                onChange={(e) => setIntensity(parseFloat(e.target.value))}
-                className="w-20 sm:w-28 accent-amber-400 cursor-pointer"
+                step="1"
+                value={seismicBall}
+                onChange={(e) => setSeismicBall(parseInt(e.target.value))}
+                className="w-full h-1.5 bg-slate-700 rounded-lg cursor-pointer accent-rose-500"
               />
-              <span className="text-xs font-bold font-mono text-amber-400 w-8">{intensity}</span>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setSimMode(simMode === "quake" ? "static" : "quake")}
+                  className={`flex-1 py-1.5 rounded-lg text-white font-semibold flex items-center justify-center gap-1.5 transition text-[11px] ${
+                    simMode === "quake" ? "bg-rose-600 ring-2 ring-white" : "bg-rose-600/80 hover:bg-rose-600"
+                  }`}
+                >
+                  <Activity size={13} /> Zilzila
+                </button>
+                <button
+                  onClick={() => setSimMode(simMode === "wind" ? "static" : "wind")}
+                  className={`flex-1 py-1.5 rounded-lg text-white font-semibold flex items-center justify-center gap-1.5 transition text-[11px] ${
+                    simMode === "wind" ? "bg-cyan-600 ring-2 ring-white" : "bg-cyan-700/80 hover:bg-cyan-600"
+                  }`}
+                >
+                  <Wind size={13} /> Shamol
+                </button>
+              </div>
             </div>
-          )}
+          </div>
+        )}
+      </aside>
+
+      {/* O'ng Muhandislik Telemetriyasi (HUD Telemetry) */}
+      <aside className="absolute top-16 right-3 w-64 sm:w-72 backdrop-blur-xl bg-slate-950/85 border border-white/10 rounded-2xl z-10 p-3.5 pointer-events-auto space-y-2.5 font-mono shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/10 pb-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <Activity size={14} className="text-cyan-400" /> Telemetriya (QMQ)
+          </span>
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="Faol" />
         </div>
-      </div>
+
+        {/* Asosiy Raqamlar */}
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="bg-slate-900/60 p-2 rounded-xl border border-white/5">
+            <div className="text-[10px] text-slate-400">Balandlik (H)</div>
+            <div className="text-sm font-bold text-cyan-400">{totalHeightM.toFixed(1)} m</div>
+          </div>
+          <div className="bg-slate-900/60 p-2 rounded-xl border border-white/5">
+            <div className="text-[10px] text-slate-400">Massa (D+0.5L)</div>
+            <div className="text-sm font-bold text-slate-200">{totalWeightTonnes.toLocaleString()} t</div>
+          </div>
+        </div>
+
+        {/* Xususiy davr T1 */}
+        <div className="bg-slate-900/60 p-2 rounded-xl border border-white/5 text-xs space-y-1">
+          <div className="flex justify-between text-slate-400 text-[10px]">
+            <span>Xususiy davr (T₁):</span>
+            <span className="font-bold text-amber-300">{periodT1Sec} s</span>
+          </div>
+          <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+            <div
+              className="bg-amber-400 h-full transition-all duration-300"
+              style={{ width: `${Math.min(100, (periodT1Sec / 3.0) * 100)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Kesuvchi Kuch Q0 */}
+        <div className="bg-slate-900/60 p-2 rounded-xl border border-white/5 text-xs space-y-0.5">
+          <div className="flex justify-between text-slate-400 text-[10px]">
+            <span>Kesuvchi kuch (Q₀):</span>
+            <span className="font-bold text-rose-400">{baseShearKn.toLocaleString()} kN</span>
+          </div>
+          <div className="text-[9px] text-slate-500 italic">Poydevor kesimi bo'yicha</div>
+        </div>
+
+        {/* Gorizontal Siljish (Drift Check) */}
+        <div
+          className={`p-2.5 rounded-xl border space-y-1 transition-colors ${
+            isDriftSafe
+              ? "bg-emerald-950/40 border-emerald-500/40"
+              : "bg-rose-950/40 border-rose-500/50 shadow-[0_0_20px_rgba(244,63,94,0.2)]"
+          }`}
+        >
+          <div className="flex items-center justify-between text-xs">
+            <span className="font-bold text-slate-300 text-[10px]">Siljish (Δ):</span>
+            <span className={`font-bold ${isDriftSafe ? "text-emerald-400" : "text-rose-400"}`}>
+              {driftMm} mm
+            </span>
+          </div>
+          <div className="flex justify-between text-[10px] text-slate-400">
+            <span>Cheklov (H / 500):</span>
+            <span>{driftLimitMm} mm</span>
+          </div>
+          <div
+            className={`mt-1 text-[10px] font-bold text-center py-1 rounded flex items-center justify-center gap-1.5 ${
+              isDriftSafe
+                ? "bg-emerald-500/20 text-emerald-300"
+                : "bg-rose-500/20 text-rose-300 animate-bounce"
+            }`}
+          >
+            {isDriftSafe ? <ShieldCheck size={13} /> : <ShieldAlert size={13} />}
+            <span>{isDriftSafe ? "QMQ CHEKLOVIGA MOS (OK)" : "CHEKLOVDAN OSHDI (XAVF)"}</span>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }
