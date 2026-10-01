@@ -79,12 +79,41 @@ async def get_current_user(
                     headers={"WWW-Authenticate": "Bearer"},
                 )
             user = user_response.user
-            # User metadata dan organization_id ni oling
-            org_id = (user.user_metadata or {}).get("organization_id")
-            role = (user.user_metadata or {}).get("role", "architect")
+            user_id = str(user.id)
+            email = user.email or ""
+
+            # 1. Server boshqaruvidagi app_metadata dan tekshirish (client o'zgartira olmaydi)
+            app_meta = getattr(user, "app_metadata", {}) or {}
+            org_id = app_meta.get("organization_id")
+            role = app_meta.get("role")
+
+            # 2. Agar app_metadata da bo'lmasa, authoritative DB (public.users) dan o'qish
+            if not org_id or not role:
+                try:
+                    db_user = supabase.table("users").select("organization_id, role").eq("id", user_id).limit(1).execute()
+                    if db_user.data and len(db_user.data) > 0:
+                        row = db_user.data[0]
+                        org_id = org_id or row.get("organization_id")
+                        role = role or row.get("role")
+                except Exception as db_err:
+                    logger.warning(f"Auth DB tekshiruvida ogohlantirish: {db_err}")
+
+            # 3. Development muhitida qulay fallback, Production da qat'iy tekshiruv
+            if not org_id:
+                if settings.ENVIRONMENT == "development":
+                    org_id = "dev-org-001"
+                else:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Foydalanuvchi biror faol tashkilotga a'zo emas.",
+                    )
+
+            if not role:
+                role = "architect"
+
             return AuthenticatedUser(
-                user_id=str(user.id),
-                email=user.email or "",
+                user_id=user_id,
+                email=email,
                 organization_id=org_id,
                 role=role,
             )

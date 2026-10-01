@@ -112,26 +112,74 @@ async def run_check(
     except (ValueError, AttributeError):
         clean_project_id = str(uuid.uuid4())
 
-    # 1. Yuklash katalogini tayyorlash
+    # 1. Fayl formati va xavfsiz nomlash
+    raw_filename = file.filename or "drawing.pdf"
+    clean_filename = Path(raw_filename).name
+    ext = Path(clean_filename).suffix.lower()
+    ext_clean = ext.lstrip(".")
+
+    allowed_exts = settings.ALLOWED_EXTENSIONS
+    if isinstance(allowed_exts, str):
+        allowed_list = [e.strip().lower().lstrip(".") for e in allowed_exts.split(",") if e.strip()]
+    else:
+        allowed_list = [str(e).lower().lstrip(".") for e in allowed_exts]
+
+    if ext_clean not in allowed_list and ext not in allowed_list:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Fayl formati ruxsat etilmagan ({ext}). Faqat {', '.join(allowed_list)} qabul qilinadi.",
+        )
+
+    # 2. Yuklash katalogini tayyorlash
     upload_dir = Path(settings.UPLOAD_DIR)
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    safe_file_name = f"{check_id}_{file.filename or 'drawing'}"
-    file_path = upload_dir / safe_file_name
+    safe_storage_name = f"{check_id}_{uuid.uuid4().hex[:8]}{ext}"
+    file_path = upload_dir / safe_storage_name
 
-    # 2. Faylni diskka asinxron yozish
+    # 3. Faylni o'qish, magic bytes va hajm chegarasini tekshirish
+    max_bytes = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    total_bytes = 0
+    first_chunk = True
+
     try:
         async with aiofiles.open(file_path, "wb") as buffer:
             while content := await file.read(1024 * 1024):
+                if first_chunk and len(content) > 0:
+                    header = content[:256]
+                    if ext == ".pdf" and not header.startswith(b"%PDF-"):
+                        raise ValueError("Fayl formati yaroqsiz: Haqiqiy PDF fayl bosh sarlavhasi topilmadi.")
+                    elif ext == ".png" and not header.startswith(b"\x89PNG\r\n\x1a\n"):
+                        raise ValueError("Fayl formati yaroqsiz: Haqiqiy PNG fayl sarlavhasi topilmadi.")
+                    elif ext in (".jpg", ".jpeg") and not header.startswith(b"\xff\xd8\xff"):
+                        raise ValueError("Fayl formati yaroqsiz: Haqiqiy JPEG fayl sarlavhasi topilmadi.")
+                    elif ext == ".dxf":
+                        if b"SECTION" not in header and not header.startswith(b"AutoCAD Binary DXF"):
+                            raise ValueError("Fayl formati yaroqsiz: Haqiqiy DXF chizma sarlavhasi topilmadi.")
+                    first_chunk = False
+
+                total_bytes += len(content)
+                if total_bytes > max_bytes:
+                    raise ValueError(f"Fayl hajmi ruxsat etilgan limitdan ({settings.MAX_FILE_SIZE_MB} MB) oshib ketdi.")
+
                 await buffer.write(content)
+    except ValueError as val_err:
+        if file_path.exists():
+            file_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(val_err),
+        )
     except Exception as e:
+        if file_path.exists():
+            file_path.unlink(missing_ok=True)
         logger.error(f"Faylni saqlashda xato: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Faylni yuklashda xatolik yuz berdi: {str(e)}",
         )
 
-    # 3. JSON building_data ni tahlil qilish
+    # 4. JSON building_data ni tahlil qilish
     parsed_building_data = {}
     if building_data:
         try:
@@ -139,11 +187,11 @@ async def run_check(
         except json.JSONDecodeError:
             logger.warning("building_data noto'g'ri JSON formatida yuborildi.")
 
-    # 4. Check dastlabki holatini saqlash
+    # 5. Check dastlabki holatini saqlash
     initial_check_data = {
         "id": check_id,
         "project_id": clean_project_id,
-        "file_name": file.filename or "drawing",
+        "file_name": clean_filename,
         "file_path": str(file_path),
         "status": CheckJobStatus.PENDING.value,
         "results": [],
@@ -156,35 +204,22 @@ async def run_check(
     supabase = get_supabase()
     if supabase:
         try:
-            # 4.1 organization_id ni aniqlash
-            # Avvalo loyihaning o'zidan organization_id ni olamiz (FK integrity kafolati)
-            org_id = None
-            try:
-                proj_res = supabase.table("projects").select("organization_id").eq("id", clean_project_id).execute()
-                if proj_res.data and len(proj_res.data) > 0:
-                    org_id = proj_res.data[0].get("organization_id")
-            except Exception:
-                pass
-
-            # Agar loyihada bo'lmasa, current_user dagi organization_id bazada bor-yo'qligini tekshirish
-            if not org_id and current_user and current_user.organization_id:
-                try:
-                    check_org = supabase.table("organizations").select("id").eq("id", current_user.organization_id).execute()
-                    if check_org.data and len(check_org.data) > 0:
-                        org_id = current_user.organization_id
-                except Exception:
-                    pass
-
-            # Agar hali ham topilmasa, bazadagi mavjud birinchi tashkilotni olish
+            # 5.1 organization_id ni aniqlash (Zero Cross-Tenant Leakage)
+            org_id = current_user.organization_id if current_user else None
             if not org_id:
                 try:
-                    org_res = supabase.table("organizations").select("id").limit(1).execute()
-                    if org_res.data and len(org_res.data) > 0:
-                        org_id = org_res.data[0]["id"]
+                    proj_res = supabase.table("projects").select("organization_id").eq("id", clean_project_id).execute()
+                    if proj_res.data and len(proj_res.data) > 0:
+                        org_id = proj_res.data[0].get("organization_id")
                 except Exception:
                     pass
 
             if not org_id:
+                if settings.ENVIRONMENT == "production":
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Ushbu tekshiruv uchun faol tashkilot (organization_id) talab etiladi.",
+                    )
                 org_id = "a0000000-0000-0000-0000-000000000001"
 
             # 4.2 Loyiha mavjudligini kafolatlash (FK constraint uchun)

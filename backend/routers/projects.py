@@ -28,27 +28,23 @@ logger = logging.getLogger("memore_ai.projects")
     status_code=status.HTTP_201_CREATED,
     summary="Yangi bino loyihasini yaratish",
 )
-async def create_project(payload: ProjectCreate) -> ProjectResponse:
+async def create_project(
+    payload: ProjectCreate,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> ProjectResponse:
     """
     Yangi arxitektura loyihasini ro'yxatdan o'tkazadi.
-    Standart UUID formatidagi ID bilan saqlanadi.
-    Supabase 'projects' jadvaliga saqlaydi (yoki xotiraga fallback).
+    Loyiha qat'iy ravishda joriy foydalanuvchining tashkilotiga (organization_id) bog'lanadi.
     """
     project_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    supabase = get_supabase()
-    org_id = None
-    if supabase:
-        try:
-            org_res = supabase.table("organizations").select("id").limit(1).execute()
-            if org_res.data and len(org_res.data) > 0:
-                org_id = org_res.data[0]["id"]
-        except Exception as org_err:
-            logger.warning(f"Tashkilot ID sini aniqlashda ogohlantirish: {org_err}")
-
+    org_id = current_user.organization_id
     if not org_id:
-        org_id = "a0000000-0000-0000-0000-000000000001"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Loyihani yaratish uchun foydalanuvchining faol organization_id si talab qilinadi.",
+        )
 
     project_data = {
         "id": project_id,
@@ -62,6 +58,7 @@ async def create_project(payload: ProjectCreate) -> ProjectResponse:
         "updated_at": now_iso,
     }
 
+    supabase = get_supabase()
     if supabase:
         try:
             res = supabase.table("projects").insert(project_data).execute()
@@ -83,18 +80,23 @@ async def create_project(payload: ProjectCreate) -> ProjectResponse:
 @router.get(
     "",
     response_model=List[ProjectResponse],
-    summary="Barcha loyihalar ro'yxatini olish",
+    summary="Faqat o'z tashkilotiga tegishli loyihalar ro'yxatini olish",
 )
-async def list_projects() -> List[ProjectResponse]:
+async def list_projects(
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> List[ProjectResponse]:
     """
-    Tizimdagi barcha bino loyihalari ro'yxatini qaytaradi.
+    Tizimdagi joriy foydalanuvchi tashkilotiga tegishli bino loyihalari ro'yxatini qaytaradi.
     """
     results = []
     seen_ids = set()
     supabase = get_supabase()
     if supabase:
         try:
-            res = supabase.table("projects").select("*").order("created_at", desc=True).execute()
+            query = supabase.table("projects").select("*").order("created_at", desc=True)
+            if current_user.organization_id:
+                query = query.eq("organization_id", current_user.organization_id)
+            res = query.execute()
             if res.data:
                 for item in res.data:
                     results.append(ProjectResponse(**item))
@@ -106,22 +108,25 @@ async def list_projects() -> List[ProjectResponse]:
                 detail=f"Ma'lumotlar bazasidan loyihalarni o'qishda xatolik: {str(e)}",
             )
 
-    # Fallback memory store dagi loyihalarni ham qo'shish
+    # Fallback memory store dagi loyihalarni ham qo'shish (faqat o'z tashkiloti)
     for p in memory_store["projects"].values():
         if p.get("id") not in seen_ids:
-            results.append(ProjectResponse(**p))
+            if not current_user.organization_id or p.get("organization_id") == current_user.organization_id:
+                results.append(ProjectResponse(**p))
     return results
 
 
 @router.get(
     "/{project_id}",
     response_model=ProjectResponse,
-    summary="Loyiha tafsilotlarini ID orqali olish",
+    summary="Loyiha tafsilotlarini ID orqali olish (tenant tekshiruvi bilan)",
 )
-async def get_project(project_id: str) -> ProjectResponse:
+async def get_project(
+    project_id: str,
+    current_user: AuthenticatedUser = Depends(get_current_user),
+) -> ProjectResponse:
     """
-    Berilgan ID bo'yicha loyihani topadi va qaytaradi.
-    Topilmasa 404 xatolik qaytaradi.
+    Berilgan ID bo'yicha loyihani topadi — faqat foydalanuvchi tashkilotiga tegishli bo'lsa.
     """
     is_valid_uuid = False
     try:
@@ -133,7 +138,10 @@ async def get_project(project_id: str) -> ProjectResponse:
     supabase = get_supabase()
     if supabase and is_valid_uuid:
         try:
-            res = supabase.table("projects").select("*").eq("id", project_id).execute()
+            query = supabase.table("projects").select("*").eq("id", project_id)
+            if current_user.organization_id:
+                query = query.eq("organization_id", current_user.organization_id)
+            res = query.execute()
             if res.data and len(res.data) > 0:
                 return ProjectResponse(**res.data[0])
         except Exception as e:
@@ -145,9 +153,11 @@ async def get_project(project_id: str) -> ProjectResponse:
 
     # Fallback memory store
     if project_id in memory_store["projects"]:
-        return ProjectResponse(**memory_store["projects"][project_id])
+        p = memory_store["projects"][project_id]
+        if not current_user.organization_id or p.get("organization_id") == current_user.organization_id:
+            return ProjectResponse(**p)
 
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Loyiha topilmadi: {project_id}",
+        detail=f"Loyiha topilmadi yoki unga ruxsat mavjud emas: {project_id}",
     )

@@ -124,7 +124,8 @@ BEGIN
             'authenticated',
             'authenticated',
             'admin@memorai.uz',
-            crypt('MemoraAdmin2026!', gen_salt('bf')),
+            -- Xavfsiz parollash: Hech qachon ochiq matnli parollar saqlanmaydi
+            crypt(COALESCE(NULLIF(current_setting('app.settings.seed_admin_password', true), ''), 'MemoreAdmin#' || substr(gen_random_uuid()::text, 1, 12)), gen_salt('bf')),
             NOW(),
             '{"provider": "email", "providers": ["email"]}'::jsonb,
             '{"full_name": "Javohirbek Asqarov", "role": "owner"}'::jsonb,

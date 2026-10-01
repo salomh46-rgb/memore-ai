@@ -53,202 +53,149 @@ export default function WorkspaceApp() {
     }
   };
 
-  const runAudit = () => {
+  const [currentCheckId, setCurrentCheckId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [coveragePercent, setCoveragePercent] = useState<number | null>(null);
+  const [isEkspertizaReady, setIsEkspertizaReady] = useState<boolean | null>(null);
+
+  const runAudit = async () => {
     setIsAuditing(true);
     setResults(null);
-    setAuditStep("BIM Geometriyasi va PDF chizma qatlamlari skanerlanmoqda...");
+    setErrorMessage(null);
+    setAuditStep("Chizma tahlili uchun serverga uzatilmoqda...");
 
-    setTimeout(() => {
-      setAuditStep("ShNQ 2.07.02-22 (Inkluzivlik, pandus va yo'laklar) tahlili...");
-    }, 900);
-
-    setTimeout(() => {
-      setAuditStep("ShNQ 2.01.02-04 (Yong'in texnikasi yo'li va oraliqlar) tahlili...");
-    }, 1800);
-
-    setTimeout(() => {
-      setAuditStep("QMQ 2.01.03-19 (Seysmik mustahkamlik va deformatsiya choklari)...");
-    }, 2600);
-
-    setTimeout(() => {
-      const evaluatedResults: AuditResultItem[] = [];
-
-      // 1. Pandus qiyaligi (ShNQ 2.07.02-22, §17: <= 8.33%)
-      const isRampPass = rampSlope <= 8.33;
-      evaluatedResults.push({
-        id: "UZ-ACCESS-001",
-        code: "ShNQ 2.07.02-22",
-        clause: "§17",
-        category: "Inkluzivlik",
-        title: "Kirish pandusi bo'ylama qiyaligi",
-        severity: "critical",
-        status: isRampPass ? "pass" : "fail",
-        actual_value: `${rampSlope}%`,
-        required_value: "≤ 8.33% (1:12)",
-        message: isRampPass 
-          ? "Pandus qiyaligi ShNQ 2.07.02-22 me'yoriy talablariga to'liq mos."
-          : `Pandus qiyaligi ${rampSlope}% — ruxsat etilgan 8.33% (1:12) dan sezilarli darajada tik!`,
-        recommendation: isRampPass
-          ? "Mavjud qiyalik saqlansin."
-          : "Pandus uzunligini oshiring yoki aylanma yo'lak loyihalang. 8.33% dan ortiq qiyalikda Davlat Ekspertizasi loyihani rad etadi."
-      });
-
-      // 2. Shift balandligi (ShNQ 2.08.01-19: >= 2.70m)
-      const isCeilingPass = ceilingHeight >= 2.70;
-      evaluatedResults.push({
-        id: "UZ-CEILING-001",
-        code: "ShNQ 2.08.01-19",
-        clause: "Turar-joy balandligi",
-        category: "Sanitariya-gigiyena",
-        title: "Xonalar toza shift balandligi (pol-shift)",
-        severity: "high",
-        status: isCeilingPass ? "pass" : "fail",
-        actual_value: `${ceilingHeight} m`,
-        required_value: "≥ 2.70 m",
-        message: isCeilingPass 
-          ? "Shift balandligi sanitariya va qurilish me'yorlariga mos."
-          : `Shift balandligi ${ceilingHeight}m — yangi turar-joylarda minimal 2.70m toza balandlik shart!`,
-        recommendation: isCeilingPass
-          ? "Balandlik saqlansin."
-          : "Qavat kesimida orayopma plitalari orasidagi toza masofani kamida 2.70 metr qilib qayta hisoblang."
-      });
-
-      // 3. Yong'in yo'li (ShNQ 2.01.02-04, §3.10: >= 6.0m)
-      const isFireRoadPass = fireRoadWidth >= 6.0;
-      evaluatedResults.push({
-        id: "UZ-FIRE-001",
-        code: "ShNQ 2.01.02-04",
-        clause: "Ilova 1, §3.10",
-        category: "Yong'in xavfsizligi",
-        title: "Yong'in o'chirish texnikasi yo'li kengligi",
-        severity: "critical",
-        status: isFireRoadPass ? "pass" : "fail",
-        actual_value: `${fireRoadWidth} m`,
-        required_value: "≥ 6.0 m",
-        message: isFireRoadPass
-          ? "Yong'in texnikasi yo'li me'yorga mos."
-          : `Yong'in o'tish yo'li kengligi ${fireRoadWidth}m — kamida 6.0 metr bo'lishi shart!`,
-        recommendation: isFireRoadPass
-          ? "Yo'l gabariti qabul qilindi."
-          : "Bino fasadlari bo'ylab avtomexanizm burilish radiuslarini hisobga olib, yo'l kengligini 6 metrga yetkazing."
-      });
-
-      // 4. Avtoturargoh nisbati
-      const isParkingPass = parkingRatio >= 1.0;
-      evaluatedResults.push({
-        id: "UZ-PARKING-001",
-        code: "ShNQ 2.08.01-19",
-        clause: "Bosh reja talablari",
-        category: "Avtoturargoh",
-        title: "Xonadonlarga nisbatan avtoturargoh o'rinlari",
-        severity: "high",
-        status: isParkingPass ? "pass" : "fail",
-        actual_value: `${parkingRatio} joy/xonadon`,
-        required_value: "≥ 1.0 joy/xonadon",
-        message: isParkingPass
-          ? "Avtoturargoh joylari soni yetarli."
-          : `Ko'rsatkich ${parkingRatio} — har bir xonadonga kamida 1 ta avtoturargoh joyi talab qilinadi.`,
-        recommendation: isParkingPass
-          ? "Bosh rejadagi o'rinlar qabul qilindi."
-          : "Yerosti yoki ko'p qavatli avtoturargoh hisobiga o'rinlar sonini oshiring."
-      });
-
-      // 5. Seysmika hisobi (QMQ 2.01.03-19)
-      const seismicScore = city === "Toshkent" || city === "Samarqand" || city === "Andijon" ? 9 : 8;
-      evaluatedResults.push({
-        id: "UZ-SEISMIC-001",
-        code: "QMQ 2.01.03-19",
-        clause: "1-jadval, §1.4",
-        category: "Seysmik xavfsizlik",
-        title: `Seysmik hudud talabi (${city})`,
-        severity: "critical",
-        status: "pass",
-        actual_value: `${seismicScore} ball hisobi`,
-        required_value: `${seismicScore} ball me'yori`,
-        message: `${city} shahri ${seismicScore} ballik seysmik zonada joylashgan. Loyihada monolit temir-beton karkas va antiseysmik choklar talab etiladi.`,
-        recommendation: "Konstruktiv qismda orayopma va ustunlar tutashuv tugunlarining antiseysmik mustahkamlik hisobini ilova qiling."
-      });
-
-      // 6. Monolit Temir-beton Ustun Kesimi (QMQ 2.01.03-19 §3.41)
-      evaluatedResults.push({
-        id: "UZ-SEISMIC-005",
-        code: "QMQ 2.01.03-19",
-        clause: "§3.41",
-        category: "Seysmik xavfsizlik",
-        title: "Monolit karkas ustunlarining minimal kesimi",
-        severity: "critical",
-        status: "pass",
-        actual_value: "450 × 450 mm",
-        required_value: "≥ 400 × 400 mm",
-        message: "Ustunlar kesimi 450mm — 9 ballik seysmik zona me'yoriga to'liq mos keladi.",
-        recommendation: "Armaturalash foizi 1.2% dan kam bo'lmasligi va qisqichlar qadami 100mm bo'lishi lozim."
-      });
-
-      // 7. Monolit Poydevor Plitasi (Raft Slab - QMQ 2.01.03-19 §3.55)
-      evaluatedResults.push({
-        id: "UZ-SEISMIC-008",
-        code: "QMQ 2.01.03-19",
-        clause: "§3.55",
-        category: "Seysmik xavfsizlik",
-        title: "Monolit poydevor plitasi qalinligi",
-        severity: "critical",
-        status: "pass",
-        actual_value: "700 mm (0.7m)",
-        required_value: "≥ 600 mm",
-        message: "Poydevor plitasi 700mm — bino yukini grunt svayalariga teng taqsimlaydi.",
-        recommendation: "B25 sinfidagi gidrotexnik beton va ikki qavatli to'r armatura qo'llansin."
-      });
-
-      // 8. Evakuatsiya Zinalari Kengligi (ShNQ 2.01.02-04 §4.15)
-      evaluatedResults.push({
-        id: "UZ-FIRE-004",
-        code: "ShNQ 2.01.02-04",
-        clause: "§4.15",
-        category: "Yong'in xavfsizligi",
-        title: "Evakuatsiya zinalari marshi toza kengligi",
-        severity: "critical",
-        status: "pass",
-        actual_value: "1.25 m",
-        required_value: "≥ 1.20 m",
-        message: "Zina marshi toza kengligi 1.25m — talab etilgan 1.20m me'yordan oshiq.",
-        recommendation: "Zina maydonchasi kengligi ham kamida 1.25m bo'lishi ta'minlansin."
-      });
-
-      // 9. Ko'kalamzorlashtirish Ulushi (QMQ 2.07.01-03 §2.25)
-      evaluatedResults.push({
-        id: "UZ-URBAN-004",
-        code: "QMQ 2.07.01-03",
-        clause: "§2.25",
-        category: "Shaharsozlik",
-        title: "Turar-joy maydonini ko'kalamzorlashtirish ulushi",
-        severity: "high",
-        status: "pass",
-        actual_value: "28.5 %",
-        required_value: "≥ 25.0 %",
-        message: "Hududning 28.5 foizi yashil maydon va daraxtzorlar uchun ajratilgan.",
-        recommendation: "Tomchilash sug'orish tizimi va mahalliy iqlimga mos daraxtlar ko'zda tutilsin."
-      });
-
-      setResults(evaluatedResults);
-      setIsAuditing(false);
-
-      if (typeof window !== "undefined" && window.Telegram?.WebApp?.HapticFeedback) {
-        const hasFailures = evaluatedResults.some(r => r.status === "fail");
-        window.Telegram.WebApp.HapticFeedback.notificationOccurred(hasFailures ? "error" : "success");
+    try {
+      // 1. Faylni tayyorlash (agar fayl tanlanmagan bo'lsa, namunaviy chizma yaratamiz)
+      let uploadFile = file;
+      if (!uploadFile) {
+        setAuditStep("Namunaviy arxitektura chizmasi tayyorlanmoqda...");
+        const samplePdf = `%PDF-1.4\n% Me'morAI Namunaviy Loyiha Chizmasi\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/MediaBox[0 0 595 842]/Parent 2 0 R/Resources<<>>>>endobj\nxref\n0 4\n0000000000 65535 f \n0000000010 00000 n \n0000000060 00000 n \n0000000117 00000 n \ntrailer<</Size 4/Root 1 0 R>>\nstartxref\n212\n%%EOF`;
+        uploadFile = new File([samplePdf], "namuna_turar_joy.pdf", { type: "application/pdf" });
       }
-    }, 3400);
+
+      setAuditStep("Chizma yuklanmoqda (POST /api/checks/run)...");
+
+      const buildingData = {
+        city,
+        building_type: buildingType,
+        floors,
+        ceiling_height_m: ceilingHeight,
+        ramp_slope_percent: rampSlope,
+        ramp_rise_m: 0.5,
+        ramp_run_m: Number((0.5 / (rampSlope / 100)).toFixed(2)),
+        ramp_width_m: 1.2,
+        fire_access_road_width_m: fireRoadWidth,
+        parking_ratio: parkingRatio,
+        apartments: 48,
+        parking_spots: Math.round(48 * parkingRatio),
+        evacuation_door_width_m: 0.95
+      };
+
+      const formData = new FormData();
+      formData.append("file", uploadFile);
+      formData.append("project_id", "a0000000-0000-0000-0000-000000000001");
+      formData.append("building_data", JSON.stringify(buildingData));
+
+      const response = await fetch("/api/checks/run", {
+        method: "POST",
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}));
+        throw new Error(errJson.detail || `Server xatosi: ${response.status}`);
+      }
+
+      const checkReport = await response.json();
+      const checkId = checkReport.id;
+      setCurrentCheckId(checkId);
+
+      setAuditStep("QMQ / ShNQ qoidalari dvigateli tahlilni boshladi...");
+
+      // 2. Natijani polling orqali kutish (har 800ms)
+      let attempts = 0;
+      const maxAttempts = 35;
+      let completedReport: any = null;
+
+      while (attempts < maxAttempts) {
+        attempts++;
+        await new Promise((resolve) => setTimeout(resolve, 800));
+
+        if (attempts === 2) setAuditStep("ShNQ 2.07.02-22 (Inkluzivlik, pandus va yo'laklar) tahlili...");
+        if (attempts === 4) setAuditStep("ShNQ 2.01.02-04 (Yong'in xavfsizligi va oraliqlar) tahlili...");
+        if (attempts === 6) setAuditStep("QMQ 2.01.03-19 (Seysmik mustahkamlik va choklar)...");
+
+        try {
+          const pollRes = await fetch(`/api/checks/${checkId}`);
+          if (pollRes.ok) {
+            const current = await pollRes.json();
+            if (
+              current.status === "completed" ||
+              current.status === "requires_review" ||
+              current.status === "failed"
+            ) {
+              completedReport = current;
+              break;
+            }
+          }
+        } catch {
+          // Tarmoq vaqtinchalik uzilishida davom etamiz
+        }
+      }
+
+      if (!completedReport) {
+        throw new Error("Tahlil vaqti tugadi yoki serverdan javob kelmadi.");
+      }
+
+      if (completedReport.status === "failed") {
+        throw new Error(completedReport.error_message || "Chizmani tekshirish jarayonida xatolik yuz berdi.");
+      }
+
+      // 3. Backend javobini UI formatiga o'tkazish
+      const rawResults = completedReport.results || [];
+      const mappedResults: AuditResultItem[] = rawResults.map((r: any) => ({
+        id: r.rule_id || r.id || "RULE",
+        code: r.code || "QMQ",
+        clause: r.clause || "§1",
+        category: r.category || "Arxitektura",
+        title: r.title_uz || r.title || "Qurilish me'yori",
+        severity: (r.severity === "critical" || r.severity === "high" || r.severity === "medium") ? r.severity : "medium",
+        status: (r.status === "pass" || r.status === "fail") ? r.status : (r.status === "requires_review" ? "fail" : "pass"),
+        actual_value: r.actual_value !== undefined && r.actual_value !== null ? String(r.actual_value) : "—",
+        required_value: r.required_value !== undefined && r.required_value !== null ? String(r.required_value) : "—",
+        message: r.message_uz || r.message || "Tahlil yakunlandi.",
+        recommendation: r.recommendation_uz || r.recommendation || "Me'yor talablariga rioya qiling."
+      }));
+
+      setResults(mappedResults);
+      if (completedReport.summary) {
+        setCoveragePercent(completedReport.summary.coverage_percent ?? null);
+        setIsEkspertizaReady(Boolean(completedReport.summary.ekspertiza_ready));
+      }
+
+      if (typeof window !== "undefined" && (window as any).Telegram?.WebApp?.HapticFeedback) {
+        const hasFailures = mappedResults.some((r) => r.status === "fail");
+        (window as any).Telegram.WebApp.HapticFeedback.notificationOccurred(hasFailures ? "error" : "success");
+      }
+    } catch (err: any) {
+      console.error("Audit xatoligi:", err);
+      setErrorMessage(err.message || "Tahlil jarayonida kutilmagan xatolik yuz berdi.");
+    } finally {
+      setIsAuditing(false);
+      setAuditStep("");
+    }
   };
 
   const handleDownloadReport = () => {
-    // Rasmiy PDF ekspertiza hisoboti generatsiyasi yoki API orqali yuklab olish
-    const checkId = `exp_${Date.now()}`;
-    const reportUrl = `/api/checks/${checkId}/pdf`;
-    
-    // Yangi oynada ochish yoki to'g'ridan-to'g'ri yuklab olish
+    if (!currentCheckId) {
+      alert("Iltimos, avval ekspertiza tekshiruvini ishga tushiring.");
+      return;
+    }
+    const reportUrl = `/api/checks/${currentCheckId}/pdf`;
     const link = document.createElement("a");
     link.href = reportUrl;
     link.target = "_blank";
-    link.download = `MeMorAI_Ekspertiza_Xulosasi_${city}.pdf`;
+    link.download = `MeMorAI_Texnik_Ekspertiza_${currentCheckId.slice(0, 8)}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -307,6 +254,22 @@ export default function WorkspaceApp() {
         />
       )}
 
+      {/* Xatolik xabarnomasi */}
+      {errorMessage && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/40 text-rose-200 text-xs font-mono flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <XCircle size={18} className="text-rose-400 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+          <button 
+            onClick={() => setErrorMessage(null)} 
+            className="text-xs text-rose-400 hover:text-white underline font-bold"
+          >
+            Yopish
+          </button>
+        </div>
+      )}
+
       {/* 2. CHIZMA YUKLASH VA QMQ PARAMETRLARI */}
       {!results && !isAuditing && (
         <div className="space-y-5">
@@ -325,7 +288,7 @@ export default function WorkspaceApp() {
               type="file" 
               ref={fileInputRef} 
               onChange={handleFileChange} 
-              accept=".pdf,.dwg,.dxf,.ifc" 
+              accept=".pdf,.dxf,.png,.jpg,.jpeg" 
               className="hidden" 
             />
             {file ? (
@@ -335,7 +298,7 @@ export default function WorkspaceApp() {
                 </div>
                 <div className="text-sm font-semibold text-white mt-1">{file.name}</div>
                 <div className="text-xs text-slate-400 font-mono">
-                  {(file.size / (1024 * 1024)).toFixed(2)} MB • Fayl ekspertizaga yuklandi
+                  {(file.size / (1024 * 1024)).toFixed(2)} MB • Chizma yuklandi
                 </div>
                 <span className="text-[11px] text-cyan-400 underline mt-1">Boshqa chizmani tanlash</span>
               </div>
@@ -345,10 +308,11 @@ export default function WorkspaceApp() {
                   <Upload size={28} />
                 </div>
                 <div className="text-sm font-bold text-white mt-1">
-                  Arxitektura chizmasini (PDF / DWG / IFC) tashlang
+                  Arxitektura chizmasini (PDF yoki DXF) tashlang
                 </div>
                 <div className="text-xs text-slate-400 font-mono max-w-sm">
-                  Formatlar: <strong>PDF</strong>, <strong>DWG</strong>, <strong>DXF</strong>, <strong>IFC</strong> (BIM LOD 200-400)
+                  Formatlar: <strong>PDF</strong> (Vision AI), <strong>DXF</strong> (Vektor CAD), <strong>PNG/JPG</strong>
+                  <span className="block text-[11px] text-amber-400/90 mt-1">AutoCAD (.dwg) fayllarini DXF formatida saqlab yuklang.</span>
                 </div>
                 <span className="mt-2 text-xs font-mono font-medium px-3.5 py-1.5 rounded-full bg-cyan-500/10 text-cyan-300 border border-cyan-500/30">
                   + Faylni yuklash

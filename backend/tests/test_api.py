@@ -13,7 +13,7 @@ from backend.auth import AuthenticatedUser, get_current_user
 app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
     user_id="00000000-0000-0000-0000-000000000001",
     email="test@memore.uz",
-    organization_id=None,
+    organization_id="a0000000-0000-0000-0000-000000000001",
     role="admin",
 )
 

@@ -20,9 +20,10 @@
 DROP VIEW IF EXISTS public.checks CASCADE;
 
 -- ----------------------------------------------------------------------------
--- 2. CREATE 'checks' VIEW (compliance_checks jadvaliga havola)
+-- 2. CREATE 'checks' VIEW (compliance_checks jadvaliga havola, security_invoker faol)
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE VIEW public.checks AS
+CREATE OR REPLACE VIEW public.checks
+WITH (security_invoker = true) AS
 SELECT
     cc.id,
     cc.organization_id,
@@ -51,7 +52,7 @@ FROM public.compliance_checks cc
 LEFT JOIN public.drawing_files df ON cc.drawing_file_id = df.id;
 
 COMMENT ON VIEW public.checks IS 
-'Backend API va orqaga moslik uchun compliance_checks jadvaliga ulangan VIEW';
+'Backend API va orqaga moslik uchun compliance_checks jadvaliga ulangan RLS-himoyalangan VIEW';
 
 -- ----------------------------------------------------------------------------
 -- 3. INSTEAD OF INSERT TRIGGER FUNCTION
@@ -68,29 +69,18 @@ BEGIN
     v_check_id := COALESCE(NEW.id, gen_random_uuid());
     v_proj_id := NEW.project_id;
 
-    -- 2. organization_id ni aniqlash
+    -- 2. organization_id ni aniqlash (Zero cross-tenant leakage: hech qanday birinchi tashkilot fallback'i yo'q)
     IF NEW.organization_id IS NOT NULL THEN
         v_org_id := NEW.organization_id;
-    ELSE
-        -- Loyihadan organization_id ni olish
-        IF v_proj_id IS NOT NULL THEN
-            SELECT organization_id INTO v_org_id 
-            FROM public.projects 
-            WHERE id = v_proj_id;
-        END IF;
+    ELSIF v_proj_id IS NOT NULL THEN
+        SELECT organization_id INTO v_org_id 
+        FROM public.projects 
+        WHERE id = v_proj_id;
+    END IF;
 
-        -- Agar hali topilmasa, mavjud birinchi tashkilotni olish
-        IF v_org_id IS NULL THEN
-            SELECT id INTO v_org_id 
-            FROM public.organizations 
-            ORDER BY created_at ASC 
-            LIMIT 1;
-        END IF;
-
-        -- Agar baza butunlay bo'sh bo'lsa, xavfsiz standart UUID
-        IF v_org_id IS NULL THEN
-            v_org_id := 'a0000000-0000-0000-0000-000000000001'::uuid;
-        END IF;
+    -- Agar tashkilot aniqlanmasa, xatolik beriladi (begona tashkilotga ma'lumot tushib qolmasligi uchun)
+    IF v_org_id IS NULL THEN
+        RAISE EXCEPTION 'Xavfsizlik xatosi: Tekshiruv aniq organization_id ga bog''langan bo''lishi shart.';
     END IF;
 
     -- 3. Loyiha mavjudligini kafolatlash (Foreign Key xatolarini oldini olish)
@@ -219,8 +209,8 @@ CREATE TRIGGER trg_checks_view_delete
     FOR EACH ROW EXECUTE FUNCTION public.handle_checks_view_delete();
 
 -- ----------------------------------------------------------------------------
--- 6. PERMISSIONS & GRANTS
+-- 6. PERMISSIONS & GRANTS (Strictly no anon access - Zero Leakage)
 -- ----------------------------------------------------------------------------
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.checks TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.checks TO service_role;
-GRANT SELECT ON public.checks TO anon;
+-- ANON ruxsati qat'iyan taqiqlanadi (RLS orqali faqat autentifikatsiyalangan tenantlar ko'radi)
