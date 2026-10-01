@@ -31,9 +31,11 @@ except ImportError:
 try:
     from backend.services.vision_analyzer import GeminiVisionAnalyzer
     from backend.services.pdf_generator import PDFReportGenerator
+    from backend.services.dxf_parser import DXFBlueprintParser
 except ImportError:
     from services.vision_analyzer import GeminiVisionAnalyzer
     from services.pdf_generator import PDFReportGenerator
+    from services.dxf_parser import DXFBlueprintParser
 
 logger = logging.getLogger("memore_ai.tasks")
 settings = get_settings()
@@ -78,15 +80,27 @@ def execute_process_drawing(
         import asyncio
         data = dict(building_data or {})
 
-        # 1. GEMINI VISION MULTIMODAL EXTRACTION
-        try:
-            vision_analyzer = GeminiVisionAnalyzer(api_key=settings.GEMINI_API_KEY)
-            extracted_params = asyncio.run(vision_analyzer.analyze_drawing_file(file_path))
-            logger.info(f"Gemini Vision parametrlari ajratildi: {list(extracted_params.keys())}")
-            # Foydalanuvchi kiritgan ma'lumotlar ustun turadi, yetishmayotganlari chizmadan to'ldiriladi
-            data = {**extracted_params, **data}
-        except Exception as v_err:
-            logger.warning(f"Vision ekstraktorida ogohlantirish: {v_err}")
+        # 1. BLUEPRINT EXTRACTION (CAD DXF vs MULTIMODAL VISION)
+        ext = Path(file_path).suffix.lower()
+        if ext in (".dxf", ".dwg"):
+            try:
+                cad_parser = DXFBlueprintParser()
+                cad_result = cad_parser.parse_dxf_file(file_path)
+                if cad_result.is_valid and cad_result.extracted_parameters:
+                    logger.info(f"CAD DXF dan parametrlar olindi: {list(cad_result.extracted_parameters.keys())}")
+                    data = {**cad_result.extracted_parameters, **data}
+                elif cad_result.error_message:
+                    logger.warning(f"CAD tahlilida eslatma: {cad_result.error_message}")
+            except Exception as cad_err:
+                logger.warning(f"DXF parserda xatolik: {cad_err}")
+        else:
+            try:
+                vision_analyzer = GeminiVisionAnalyzer(api_key=settings.GEMINI_API_KEY)
+                extracted_params = asyncio.run(vision_analyzer.analyze_drawing_file(file_path))
+                logger.info(f"Gemini Vision parametrlari ajratildi: {list(extracted_params.keys())}")
+                data = {**extracted_params, **data}
+            except Exception as v_err:
+                logger.warning(f"Vision ekstraktorida ogohlantirish: {v_err}")
 
         # 2. QMQRULESENGINE TEKSHIRUVI (50+ ta ShNQ / QMQ me'yorlari)
         engine = QMQRulesEngine() if QMQRulesEngine else None
