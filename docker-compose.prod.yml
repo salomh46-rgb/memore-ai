@@ -62,6 +62,11 @@ services:
         condition: service_started
     volumes:
       - uploads_data:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep -v grep | grep -q celery || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     networks:
       - memore_net
 
