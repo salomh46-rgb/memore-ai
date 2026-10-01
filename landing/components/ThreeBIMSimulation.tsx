@@ -14,6 +14,9 @@ import {
   Wind,
   Activity,
   Maximize2,
+  Minimize2,
+  Eye,
+  EyeOff,
   Building,
   Layers,
   ChevronDown,
@@ -32,6 +35,7 @@ interface ThreeBIMProps {
 type BuildingShape = "box" | "l-shape" | "cylinder" | "tapered";
 type StructuralSystem = "core-frame" | "tube" | "outrigger" | "frame-only";
 type SimulationMode = "static" | "quake" | "wind";
+type MobilePanelTab = "params" | "telemetry" | "view";
 
 export default function ThreeBIMSimulation({
   initialFloors = 20,
@@ -39,6 +43,10 @@ export default function ThreeBIMSimulation({
   isScanning = false,
 }: ThreeBIMProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Fullscreen va Mobil UI Rejimlari
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [mobileTab, setMobileTab] = useState<MobilePanelTab>("params");
 
   // 1. Parametrik Model Sozlamalari
   const [shape, setShape] = useState<BuildingShape>("box");
@@ -554,32 +562,97 @@ export default function ThreeBIMSimulation({
   }, []);
 
   // Parametrlar o'zgarganda qayta qurish
+  // Fullscreen o'zgarganda 3D renderer o'lchamini yangilash
+  useEffect(() => {
+    const handleResize = () => {
+      const container = containerRef.current;
+      if (!container || !rendererRef.current || !cameraRef.current) return;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
+      cameraRef.current.aspect = w / h;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(w, h);
+    };
+
+    const timer = setTimeout(handleResize, 120);
+    return () => clearTimeout(timer);
+  }, [isFullscreen]);
+
+  // Parametrlar o'zgarganda qayta qurish
   useEffect(() => {
     rebuild3DStructure();
     calculateTelemetry();
   }, [shape, floors, floorH, width, depth, system, layerCore, layerColumns, layerSlabs, layerRaft, wireframe, heatmap, seismicBall]);
 
   return (
-    <div className="relative w-full h-[580px] sm:h-[620px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-[#030712] shadow-[0_0_50px_rgba(6,182,212,0.1)]">
+    <div
+      className={`transition-all duration-300 ${
+        isFullscreen
+          ? "fixed inset-0 z-[100] w-screen h-screen overflow-hidden bg-[#030712]"
+          : "relative w-full h-[620px] sm:h-[680px] lg:h-[720px] rounded-3xl overflow-hidden border border-cyan-500/30 bg-[#030712] shadow-[0_0_50px_rgba(6,182,212,0.1)]"
+      }`}
+    >
       {/* 3D WebGL Canvas */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing" />
 
       {/* Yuqori Panel (Header Toolbar) */}
-      <header className="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2.5 pointer-events-none">
-        <div className="backdrop-blur-xl bg-slate-900/80 border border-white/10 px-3.5 py-2 rounded-2xl flex items-center gap-3 pointer-events-auto shadow-xl">
-          <div className="w-8 h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400">
-            <Boxes size={18} />
+      <header className="absolute top-2.5 sm:top-3 left-2.5 sm:left-3 right-2.5 sm:right-3 z-30 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        {/* Sarlavha & Logo */}
+        <div className="backdrop-blur-xl bg-slate-900/85 border border-white/10 px-3 py-1.5 sm:py-2 rounded-2xl flex items-center gap-2.5 pointer-events-auto shadow-xl">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400">
+            <Boxes size={16} />
           </div>
           <div>
-            <h2 className="text-xs sm:text-sm font-bold font-mono tracking-tight text-white flex items-center gap-2">
-              STRUKTURA 3D BIM <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">QMQ 2.01.03-19</span>
+            <h2 className="text-xs sm:text-sm font-bold font-mono tracking-tight text-white flex items-center gap-1.5">
+              <span>STRUKTURA 3D</span>
+              <span className="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono">
+                QMQ 2.01.03-19
+              </span>
             </h2>
-            <p className="text-[10px] text-slate-400 font-mono">Parametrik bino konstruksiyasi va seysmik tahlili</p>
+            <p className="hidden sm:block text-[10px] text-slate-400 font-mono">Parametrik bino va seysmik tahlili</p>
           </div>
         </div>
 
+        {/* Mobil & Planshet Tab Switcher (Kichik ekranda overlap'ni 100% yo'qotadi) */}
+        <div className="flex lg:hidden backdrop-blur-xl bg-slate-900/90 border border-cyan-500/30 p-1 rounded-2xl gap-1 pointer-events-auto shadow-xl">
+          <button
+            onClick={() => setMobileTab("params")}
+            className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold flex items-center gap-1 transition-all ${
+              mobileTab === "params"
+                ? "bg-cyan-500 text-black shadow-[0_0_10px_#06b6d4]"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Sliders size={12} />
+            <span>Sozlash</span>
+          </button>
+          <button
+            onClick={() => setMobileTab("telemetry")}
+            className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold flex items-center gap-1 transition-all ${
+              mobileTab === "telemetry"
+                ? "bg-emerald-400 text-black shadow-[0_0_10px_#10b981]"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Activity size={12} />
+            <span>QMQ</span>
+          </button>
+          <button
+            onClick={() => setMobileTab("view")}
+            className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold flex items-center gap-1 transition-all ${
+              mobileTab === "view"
+                ? "bg-blue-600 text-white shadow-[0_0_10px_#2563eb]"
+                : "text-slate-400 hover:text-white"
+            }`}
+          >
+            <Eye size={12} />
+            <span>3D</span>
+          </button>
+        </div>
+
         {/* Tezkor Tugmalar */}
-        <div className="backdrop-blur-xl bg-slate-900/80 border border-white/10 px-2.5 py-1.5 rounded-2xl flex items-center gap-1.5 pointer-events-auto shadow-xl">
+        <div className="backdrop-blur-xl bg-slate-900/85 border border-white/10 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-2xl flex items-center gap-1 sm:gap-1.5 pointer-events-auto shadow-xl">
           <button
             onClick={() => {
               if (cameraRef.current && controlsRef.current) {
@@ -588,38 +661,50 @@ export default function ThreeBIMSimulation({
               }
             }}
             title="Kamerani tiklash"
-            className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-medium flex items-center gap-1.5 transition-all"
+            className="px-2 py-1 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-mono font-medium flex items-center gap-1 transition-all"
           >
-            <RotateCcw size={14} className="text-cyan-400" />
-            <span className="hidden sm:inline">Kamera</span>
+            <RotateCcw size={13} className="text-cyan-400" />
+            <span className="hidden md:inline">Kamera</span>
           </button>
           <button
             onClick={() => setWireframe(!wireframe)}
             title="Simli karkas rejimi"
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+            className={`px-2 py-1 sm:py-1.5 rounded-xl text-xs font-mono font-medium flex items-center gap-1 transition-all ${
               wireframe ? "bg-amber-500/20 text-amber-300 border border-amber-500/40" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
             }`}
           >
-            <Grid size={14} className="text-amber-400" />
-            <span className="hidden sm:inline">Wireframe</span>
+            <Grid size={13} className="text-amber-400" />
+            <span className="hidden md:inline">Wireframe</span>
           </button>
           <button
             onClick={() => setHeatmap(!heatmap)}
             title="Zo'riqish gradiyenti (Stress Heatmap)"
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-mono font-medium flex items-center gap-1.5 transition-all ${
+            className={`px-2 py-1 sm:py-1.5 rounded-xl text-xs font-mono font-medium flex items-center gap-1 transition-all ${
               heatmap ? "bg-rose-500/25 text-rose-300 border border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.3)]" : "bg-slate-800 hover:bg-slate-700 text-slate-200"
             }`}
           >
-            <Flame size={14} className="text-rose-400" />
-            <span>Heatmap: {heatmap ? "ON" : "OFF"}</span>
+            <Flame size={13} className="text-rose-400" />
+            <span className="text-[11px] sm:text-xs">Heatmap: {heatmap ? "ON" : "OFF"}</span>
+          </button>
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            title={isFullscreen ? "Kichraytirish" : "To'liq ekranga yoyish"}
+            className="p-1 sm:px-2 sm:py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 text-xs font-mono font-medium flex items-center gap-1 transition-all"
+          >
+            {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            <span className="hidden md:inline">{isFullscreen ? "Chiqish" : "To'liq"}</span>
           </button>
         </div>
       </header>
 
       {/* Chap Sozlamalar Paneli (Configurator) */}
-      <aside className={`absolute top-16 left-3 bottom-3 z-10 backdrop-blur-xl bg-slate-950/85 border border-white/10 rounded-2xl flex flex-col pointer-events-auto transition-all duration-300 overflow-hidden shadow-2xl ${
-        isPanelCollapsed ? "w-12" : "w-72 sm:w-80"
-      }`}>
+      <aside
+        className={`absolute top-16 left-2.5 sm:left-3 bottom-3 z-20 backdrop-blur-xl bg-slate-950/90 border border-white/10 rounded-2xl flex-col pointer-events-auto transition-all duration-300 overflow-hidden shadow-2xl ${
+          isPanelCollapsed ? "w-12" : "w-[calc(100%-20px)] sm:w-80 max-w-[340px]"
+        } ${
+          mobileTab === "params" ? "flex" : "hidden lg:flex"
+        }`}
+      >
         <div className="px-3.5 py-2.5 border-b border-white/10 flex justify-between items-center bg-slate-900/60">
           {!isPanelCollapsed && (
             <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2 font-mono">
@@ -636,7 +721,7 @@ export default function ThreeBIMSimulation({
         </div>
 
         {!isPanelCollapsed && (
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 text-xs font-mono">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-3.5 space-y-3.5 text-xs font-mono">
             {/* 1. Me'moriy Shakl */}
             <div className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-white/5">
               <label className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
@@ -655,7 +740,7 @@ export default function ThreeBIMSimulation({
                   <button
                     key={key}
                     onClick={() => setShape(key)}
-                    className={`px-2 py-1.5 rounded-lg font-medium text-[11px] text-center transition-all ${
+                    className={`px-2 py-2 rounded-lg font-semibold text-[10px] sm:text-[11px] text-center leading-tight transition-all ${
                       shape === key
                         ? "bg-cyan-600 text-white font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]"
                         : "bg-slate-800/80 hover:bg-slate-700 text-slate-300"
@@ -836,7 +921,11 @@ export default function ThreeBIMSimulation({
       </aside>
 
       {/* O'ng Muhandislik Telemetriyasi (HUD Telemetry) */}
-      <aside className="absolute top-16 right-3 w-64 sm:w-72 backdrop-blur-xl bg-slate-950/85 border border-white/10 rounded-2xl z-10 p-3.5 pointer-events-auto space-y-2.5 font-mono shadow-2xl">
+      <aside
+        className={`absolute top-16 right-2.5 sm:right-3 bottom-3 sm:bottom-auto z-20 w-[calc(100%-20px)] sm:w-72 max-w-[320px] backdrop-blur-xl bg-slate-950/90 border border-white/10 rounded-2xl p-3 sm:p-3.5 pointer-events-auto space-y-2.5 font-mono shadow-2xl overflow-y-auto ${
+          mobileTab === "telemetry" ? "block" : "hidden lg:block"
+        }`}
+      >
         <div className="flex items-center justify-between border-b border-white/10 pb-2">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
             <Activity size={14} className="text-cyan-400" /> Telemetriya (QMQ)
